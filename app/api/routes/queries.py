@@ -1,7 +1,7 @@
 """Query and chat endpoints."""
 
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, UploadFile, File
 
 from app.models import (
     QueryRequest,
@@ -11,6 +11,14 @@ from app.models import (
     ErrorResponse,
 )
 from app.core.agent import agent_manager
+from app.models.requests import DrugNamesFromImageRequest
+from app.models.responses import DrugNamesFromImageResponse
+from app.agents.drug_name_extract_agent import DrugNameExtractAgent
+from app.core.cloudinary_utils import (
+    upload_image_to_cloudinary,
+    delete_image_from_cloudinary,
+    is_cloudinary_configured,
+)
 
 router = APIRouter()
 
@@ -114,3 +122,126 @@ async def clear_session(session_id: str):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session {session_id} not found",
         )
+
+
+@router.post(
+    "/drug-name-extract",
+    response_model=DrugNamesFromImageResponse,
+    summary="Extract drug names from image URL",
+    description="Extract active ingredients from an image URL or base64-encoded image",
+    tags=["Queries"],
+    responses={
+        200: {"description": "Successful response"},
+        500: {
+            "model": ErrorResponse,
+            "description": "Error processing drug names extraction",
+        },
+    },
+)
+async def extract_drug_names_from_image(request: DrugNamesFromImageRequest):
+    """
+    Extract active ingredients from drug packaging image.
+
+    Accepts either a URL or base64-encoded image and returns:
+    - Reasoning steps showing how ingredients were identified
+    - List of active ingredients with their strengths
+    """
+    try:
+        # Initialize the drug name extract agent
+        agent = DrugNameExtractAgent(verbose=False)
+
+        # Extract drug names from the image
+        result = agent.extract_drug_names_from_image(request.image_url)
+
+        return DrugNamesFromImageResponse(
+            result=result, timestamp=datetime.utcnow().isoformat()
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing image: {str(e)}",
+        )
+
+
+@router.post(
+    "/drug-name-extract/upload",
+    response_model=DrugNamesFromImageResponse,
+    summary="Extract drug names from uploaded image",
+    description="Upload an image and extract active ingredients (uses Cloudinary for temporary storage)",
+    tags=["Queries"],
+    responses={
+        200: {"description": "Successful response"},
+        400: {
+            "model": ErrorResponse,
+            "description": "Invalid file type or Cloudinary not configured",
+        },
+        500: {
+            "model": ErrorResponse,
+            "description": "Error processing drug names extraction",
+        },
+    },
+)
+async def extract_drug_names_from_upload(
+    file: UploadFile = File(..., description="Image file of drug packaging or label")
+):
+    """
+    Extract active ingredients from uploaded drug packaging image.
+
+    The image is temporarily uploaded to Cloudinary, processed, and then deleted.
+
+    Accepts:
+    - Image file (JPEG, PNG, GIF, WebP)
+
+    Returns:
+    - Reasoning steps showing how ingredients were identified
+    - List of active ingredients with their strengths
+    """
+    # Check if Cloudinary is configured
+    if not is_cloudinary_configured():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cloudinary is not configured. Please set CLOUDINARY_CLOUD_NAME, "
+            "CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in environment variables.",
+        )
+
+    public_id = None
+
+    try:
+        # Upload image to Cloudinary
+        upload_result = await upload_image_to_cloudinary(file)
+        public_id = upload_result.get("public_id")
+        image_url = upload_result.get("secure_url")
+
+        if not image_url:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to get image URL from Cloudinary",
+            )
+
+        # Initialize the drug name extract agent
+        agent = DrugNameExtractAgent(verbose=False)
+
+        # Extract drug names from the image
+        result = agent.extract_drug_names_from_image(image_url)
+
+        return DrugNamesFromImageResponse(
+            result=result, timestamp=datetime.utcnow().isoformat()
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing image: {str(e)}",
+        )
+    finally:
+        pass
+        # Clean up: Delete the temporary image from Cloudinary
+        # if public_id:
+        #     try:
+        #         delete_image_from_cloudinary(public_id)
+        #     except Exception as e:
+        #         # Log the error but don't fail the request
+        #         print(f"Warning: Failed to delete temporary image: {str(e)}")

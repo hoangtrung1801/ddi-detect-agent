@@ -44,3 +44,21 @@ class ChatRequest(BaseModel):
             ]
         }
     }
+
+
+class DrugNamesFromImageRequest(BaseModel):
+    """Request model for extracting drug names from image."""
+
+    image_url: str = Field(
+        ...,
+        description="URL or base64-encoded image of the drug packaging/label",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {"image_url": "https://example.com/drug-package.jpg"},
+                {"image_url": "data:image/jpeg;base64,/9j/4AAQSkZJRg..."},
+            ]
+        }
+    }

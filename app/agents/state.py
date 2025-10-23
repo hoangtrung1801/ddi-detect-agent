@@ -9,7 +9,7 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
 
-class AgentState(TypedDict):
+class DrugInteractionAgentState(TypedDict):
     """
     State for the drug interaction agent.
 
@@ -26,4 +26,14 @@ class AgentState(TypedDict):
     output: str
 
     # Intermediate steps (for debugging/logging)
+    intermediate_steps: list
+
+
+class DrugNameExtractAgentState(TypedDict):
+    """
+    State for the drug name extract agent.
+    """
+
+    input: str
+    output: str
     intermediate_steps: list

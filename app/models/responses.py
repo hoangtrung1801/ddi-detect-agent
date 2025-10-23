@@ -1,6 +1,6 @@
 """Response models for API endpoints."""
 
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 
@@ -42,3 +42,10 @@ class ErrorResponse(BaseModel):
 
     error: str = Field(..., description="Error message")
     detail: Optional[str] = Field(None, description="Detailed error information")
+
+
+class DrugNamesFromImageResponse(BaseModel):
+    """Response model for drug name extraction from image."""
+
+    result: list[str] = Field(..., description="List of drug names")
+    timestamp: str = Field(..., description="ISO timestamp of the response")

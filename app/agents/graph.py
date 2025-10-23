@@ -10,7 +10,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.memory import MemorySaver
 
-from .state import AgentState
+from .state import DrugInteractionAgentState
 from .tools import DrugInteractionTools
 from drug_interaction_graph import DrugInteractionGraph
 
@@ -72,7 +72,7 @@ class DrugInteractionGraph:
             Compiled StateGraph
         """
         # Create the graph
-        workflow = StateGraph(AgentState)
+        workflow = StateGraph(DrugInteractionAgentState)
 
         # Add nodes
         workflow.add_node("agent", self._agent_node)
@@ -96,7 +96,7 @@ class DrugInteractionGraph:
 
         return workflow
 
-    def _agent_node(self, state: AgentState) -> dict:
+    def _agent_node(self, state: DrugInteractionAgentState) -> dict:
         """
         Agent reasoning node.
 

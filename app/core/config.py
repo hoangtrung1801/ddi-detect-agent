@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-5-mini-2025-08-07"
 
+    # Cloudinary Configuration
+    CLOUDINARY_CLOUD_NAME: Optional[str] = None
+    CLOUDINARY_API_KEY: Optional[str] = None
+    CLOUDINARY_API_SECRET: Optional[str] = None
+
     # Data Configuration
     DATA_FILE: str = "TWOSIDES_preprocessed.csv"
 
@@ -52,6 +57,15 @@ class Settings(BaseSettings):
         # Override with environment variables
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", self.OPENAI_API_KEY)
         self.OPENAI_MODEL = os.getenv("OPENAI_MODEL", self.OPENAI_MODEL)
+        self.CLOUDINARY_CLOUD_NAME = os.getenv(
+            "CLOUDINARY_CLOUD_NAME", self.CLOUDINARY_CLOUD_NAME
+        )
+        self.CLOUDINARY_API_KEY = os.getenv(
+            "CLOUDINARY_API_KEY", self.CLOUDINARY_API_KEY
+        )
+        self.CLOUDINARY_API_SECRET = os.getenv(
+            "CLOUDINARY_API_SECRET", self.CLOUDINARY_API_SECRET
+        )
         self.DATA_FILE = os.getenv("DATA_FILE", self.DATA_FILE)
         self.API_HOST = os.getenv("API_HOST", self.API_HOST)
         self.API_PORT = int(os.getenv("API_PORT", str(self.API_PORT)))

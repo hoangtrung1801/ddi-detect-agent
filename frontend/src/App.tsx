@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Pill, Loader2 } from "lucide-react";
 import { ImageUpload } from "./components/ImageUpload";
+import {
+    MultiImageResults,
+    type ImageResult,
+} from "./components/MultiImageResults";
 import { DrugList } from "./components/DrugList";
 import { InteractionResults } from "./components/InteractionResults";
 import { Button } from "./components/ui/button";
@@ -17,12 +21,27 @@ import { drugInteractionAPI } from "./lib/api";
 import "./App.css";
 
 function App() {
-    const [selectedImage, setSelectedImage] = useState<File | null>(null);
+    const [selectedImages, setSelectedImages] = useState<File[]>([]);
+    const [imageResults, setImageResults] = useState<ImageResult[]>([]);
     const [detectedDrugs, setDetectedDrugs] = useState<string[]>([]);
     const [ocrProgress, setOcrProgress] = useState(0);
     const [interactionResult, setInteractionResult] = useState<string>("");
+    const [isProcessingImages, setIsProcessingImages] = useState(false);
 
-    // OCR processing mutation
+    // Drug name extraction mutation
+    const drugExtractionMutation = useMutation({
+        mutationFn: async (file: File) => {
+            const result = await drugInteractionAPI.extractDrugNamesFromImage(
+                file
+            );
+            return result;
+        },
+        onError: (error) => {
+            console.error("Drug extraction error:", error);
+        },
+    });
+
+    // OCR processing mutation (keeping for backward compatibility)
     const ocrMutation = useMutation({
         mutationFn: async (file: File) => {
             setOcrProgress(0);
@@ -61,15 +80,122 @@ function App() {
         },
     });
 
-    const handleImageSelect = (file: File) => {
-        setSelectedImage(file);
+    // Process multiple images
+    const processImages = useCallback(async (files: File[]) => {
+        setIsProcessingImages(true);
+        setImageResults([]);
+        setDetectedDrugs([]);
+        setInteractionResult("");
+
+        const newResults: ImageResult[] = files.map((file) => ({
+            file,
+            preview: URL.createObjectURL(file),
+            extractedIngredients: [],
+            isLoading: true,
+        }));
+
+        setImageResults(newResults);
+
+        // Process each image
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            try {
+                // const result =
+                //     await drugInteractionAPI.extractDrugNamesFromImage(file);
+                const result = await drugExtractionMutation.mutateAsync(file);
+
+                setImageResults((prev) =>
+                    prev.map((imgResult, index) =>
+                        index === i
+                            ? {
+                                  ...imgResult,
+                                  extractedIngredients: result.result,
+                                  isLoading: false,
+                              }
+                            : imgResult
+                    )
+                );
+
+                // Add to detected drugs list
+                setDetectedDrugs((prev) => {
+                    const newDrugs = result.result.filter(
+                        (drug) => !prev.includes(drug)
+                    );
+                    return [...prev, ...newDrugs];
+                });
+            } catch (error) {
+                console.error(`Error processing ${file.name}:`, error);
+                setImageResults((prev) =>
+                    prev.map((imgResult, index) =>
+                        index === i
+                            ? {
+                                  ...imgResult,
+                                  isLoading: false,
+                                  error: "Failed to extract ingredients",
+                              }
+                            : imgResult
+                    )
+                );
+            }
+        }
+
+        setIsProcessingImages(false);
+    }, []);
+
+    const handleImageSelect = (files: File[]) => {
+        setSelectedImages(files);
+        processImages(files);
+    };
+
+    const handleClearImages = () => {
+        setSelectedImages([]);
+        setImageResults([]);
+        setDetectedDrugs([]);
+        setInteractionResult("");
+        setOcrProgress(0);
+    };
+
+    const handleRemoveImage = (fileName: string) => {
+        const newImages = selectedImages.filter((img) => img.name !== fileName);
+        setSelectedImages(newImages);
+
+        setImageResults((prev) => {
+            const newResults = prev.filter(
+                (result) => result.file.name !== fileName
+            );
+            return newResults;
+        });
+
+        // Update detected drugs list
+        const removedResult = imageResults.find(
+            (result) => result.file.name === fileName
+        );
+        if (removedResult) {
+            setDetectedDrugs((prev) =>
+                prev.filter(
+                    (drug) => !removedResult.extractedIngredients.includes(drug)
+                )
+            );
+        }
+    };
+
+    const handleRetryImage = (fileName: string) => {
+        const file = selectedImages.find((img) => img.name === fileName);
+        if (file) {
+            processImages([file]);
+        }
+    };
+
+    // Legacy single image handler (keeping for backward compatibility)
+    const handleSingleImageSelect = (file: File) => {
+        setSelectedImages([file]);
         setDetectedDrugs([]);
         setInteractionResult("");
         ocrMutation.mutate(file);
     };
 
     const handleClearImage = () => {
-        setSelectedImage(null);
+        setSelectedImages([]);
         setDetectedDrugs([]);
         setInteractionResult("");
         setOcrProgress(0);
@@ -88,11 +214,11 @@ function App() {
         interactionMutation.mutate(detectedDrugs);
     };
 
-    const isProcessing = ocrMutation.isPending;
+    const isProcessing = ocrMutation.isPending || isProcessingImages;
     const isCheckingInteractions = interactionMutation.isPending;
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        <div className="min-h-screen bg-linear-to-br from-blue-50 via-white to-purple-50">
             <div className="container mx-auto px-4 py-8 max-w-4xl">
                 {/* Header */}
                 <div className="text-center mb-8">
@@ -100,13 +226,14 @@ function App() {
                         <div className="rounded-full bg-primary/10 p-3">
                             <Pill className="h-8 w-8 text-primary" />
                         </div>
-                        <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                        <h1 className="text-4xl font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                             Drug Interaction Checker
                         </h1>
                     </div>
                     <p className="text-muted-foreground text-lg">
-                        Upload an image of your medication labels to check for
-                        potential drug interactions
+                        Upload images of your medication labels to extract
+                        active ingredients and check for potential drug
+                        interactions
                     </p>
                 </div>
 
@@ -115,41 +242,67 @@ function App() {
                     {/* Upload Section */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Step 1: Upload Image</CardTitle>
+                            <CardTitle>Step 1: Upload Images</CardTitle>
                             <CardDescription>
-                                Take a photo of your medication labels or
-                                prescription
+                                Upload images of your medication labels to
+                                extract active ingredients
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <ImageUpload
                                 onImageSelect={handleImageSelect}
-                                onClear={handleClearImage}
-                                selectedImage={selectedImage}
+                                onClear={handleClearImages}
+                                selectedImages={selectedImages}
                                 isProcessing={isProcessing}
+                                maxFiles={5}
                             />
 
-                            {/* OCR Progress */}
-                            {isProcessing && (
+                            {/* Processing Progress */}
+                            {isProcessingImages && (
                                 <div className="mt-4 space-y-2">
                                     <div className="flex items-center justify-between text-sm">
                                         <span className="text-muted-foreground">
-                                            Processing image...
+                                            Processing images...
                                         </span>
                                         <span className="font-medium">
-                                            {ocrProgress}%
+                                            {
+                                                imageResults.filter(
+                                                    (r) => !r.isLoading
+                                                ).length
+                                            }{" "}
+                                            of {selectedImages.length} completed
                                         </span>
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-2">
                                         <div
                                             className="bg-primary h-2 rounded-full transition-all duration-300"
-                                            style={{ width: `${ocrProgress}%` }}
+                                            style={{
+                                                width: `${
+                                                    selectedImages.length > 0
+                                                        ? (imageResults.filter(
+                                                              (r) =>
+                                                                  !r.isLoading
+                                                          ).length /
+                                                              selectedImages.length) *
+                                                          100
+                                                        : 0
+                                                }%`,
+                                            }}
                                         />
                                     </div>
                                 </div>
                             )}
                         </CardContent>
                     </Card>
+
+                    {/* Image Results */}
+                    {imageResults.length > 0 && (
+                        <MultiImageResults
+                            results={imageResults}
+                            onRemoveImage={handleRemoveImage}
+                            onRetryImage={handleRetryImage}
+                        />
+                    )}
 
                     {/* Detected Drugs */}
                     {detectedDrugs.length > 0 && (
@@ -175,6 +328,7 @@ function App() {
                                 </CardHeader>
                                 <CardContent>
                                     <Button
+                                        variant="default"
                                         onClick={handleCheckInteractions}
                                         disabled={
                                             detectedDrugs.length === 0 ||

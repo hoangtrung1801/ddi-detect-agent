@@ -12,6 +12,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from .state import DrugInteractionAgentState
 from .tools import DrugInteractionTools
+from .enhanced_tools import EnhancedDrugInteractionTools
 from drug_interaction_graph import DrugInteractionGraph
 
 
@@ -28,6 +29,7 @@ class DrugInteractionGraph:
         model_name: str = "gpt-4o-mini",
         temperature: float = 0.0,
         verbose: bool = False,
+        enable_drug_mapping: bool = True,
     ):
         """
         Initialize the drug interaction graph workflow.
@@ -37,9 +39,11 @@ class DrugInteractionGraph:
             model_name: OpenAI model to use
             temperature: Model temperature (0.0 for deterministic)
             verbose: Whether to print debug information
+            enable_drug_mapping: Whether to enable drug name mapping
         """
         self.drug_graph = graph
         self.verbose = verbose
+        self.enable_drug_mapping = enable_drug_mapping
 
         # Initialize LLM
         self.llm = ChatOpenAI(
@@ -48,8 +52,11 @@ class DrugInteractionGraph:
             # reasoning_effort="low" if "o3" in model_name else None,
         )
 
-        # Create tools
-        tool_builder = DrugInteractionTools(graph)
+        # Create tools (use enhanced tools if mapping is enabled)
+        if enable_drug_mapping:
+            tool_builder = EnhancedDrugInteractionTools(graph, enable_drug_mapping=True)
+        else:
+            tool_builder = DrugInteractionTools(graph)
         self.tools = tool_builder.create_tools()
 
         # Bind tools to LLM

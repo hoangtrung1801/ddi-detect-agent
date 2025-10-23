@@ -76,6 +76,9 @@ class DrugInteractionTools:
 
             # Search in graph
             result = graph.search_interaction(drug1, drug2)
+            print(
+                f"Search interaction between {drug1} and {drug2} -->  result: {result}"
+            )
 
             if result:
                 return (

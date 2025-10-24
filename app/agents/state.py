@@ -25,6 +25,9 @@ class DrugInteractionAgentState(TypedDict):
     # Agent's output/response
     output: str
 
+    # Translated output in Vietnamese
+    vietnamese_output: str
+
     # Intermediate steps (for debugging/logging)
     intermediate_steps: list
 

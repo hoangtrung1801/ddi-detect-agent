@@ -41,6 +41,7 @@ class DrugInteractionGraph:
             verbose: Whether to print debug information
             enable_drug_mapping: Whether to enable drug name mapping
         """
+        self.model_name = model_name
         self.drug_graph = graph
         self.verbose = verbose
         self.enable_drug_mapping = enable_drug_mapping
@@ -84,6 +85,7 @@ class DrugInteractionGraph:
         # Add nodes
         workflow.add_node("agent", self._agent_node)
         workflow.add_node("tools", ToolNode(self.tools))
+        workflow.add_node("translator", self._translator_node)
 
         # Set entry point
         workflow.set_entry_point("agent")
@@ -94,12 +96,15 @@ class DrugInteractionGraph:
             tools_condition,
             {
                 "tools": "tools",
-                END: END,
+                END: "translator",
             },
         )
 
         # Add edge from tools back to agent
         workflow.add_edge("tools", "agent")
+
+        # Add edge from translator to end
+        workflow.add_edge("translator", END)
 
         return workflow
 
@@ -231,6 +236,67 @@ Using map_drug_name_tool:
 
         return {"messages": [response]}
 
+    def _translator_node(self, state: DrugInteractionAgentState) -> dict:
+        """
+        Translation node that translates the agent's output to Vietnamese.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with Vietnamese translation
+        """
+        messages = state.get("messages", [])
+
+        # Get the last AI message (the agent's response)
+        last_ai_message = None
+        for msg in reversed(messages):
+            if isinstance(msg, AIMessage):
+                last_ai_message = msg
+                break
+
+        if not last_ai_message:
+            return {"vietnamese_output": "Không thể dịch phản hồi."}
+
+        # Create translation prompt
+        translation_prompt = f"""
+        Translate the following medical text about drug interactions from English to Vietnamese.
+        Keep the markdown formatting intact and ensure medical terminology is accurately translated.
+        Maintain the structure with headings, lists, and emphasis.
+
+        Text to translate:
+        {last_ai_message.content}
+        """
+
+        # Use a separate LLM instance for translation
+        translator_llm = ChatOpenAI(
+            model=self.model_name,
+            temperature=0.1,  # Lower temperature for more consistent translation
+        )
+
+        try:
+            # Get translation
+            translation_response = translator_llm.invoke(
+                [
+                    SystemMessage(
+                        content="You are a professional medical translator specializing in drug interaction information. Translate accurately while preserving markdown formatting."
+                    ),
+                    HumanMessage(content=translation_prompt),
+                ]
+            )
+
+            vietnamese_output = translation_response.content
+
+            if self.verbose:
+                print(f"Translation completed: {len(vietnamese_output)} characters")
+
+            return {"vietnamese_output": vietnamese_output}
+
+        except Exception as e:
+            if self.verbose:
+                print(f"Translation error: {e}")
+            return {"vietnamese_output": f"Lỗi dịch thuật: {str(e)}"}
+
     def invoke(self, input_text: str, thread_id: str = "default") -> str:
         """
         Invoke the agent with a question.
@@ -247,6 +313,7 @@ Using map_drug_name_tool:
             "messages": [HumanMessage(content=input_text)],
             "input": input_text,
             "output": "",
+            "vietnamese_output": "",
             "intermediate_steps": [],
         }
 
@@ -258,14 +325,17 @@ Using map_drug_name_tool:
             result = self.app.invoke(initial_state, config)
 
             # Extract the final message
-            messages = result.get("messages", [])
-            if messages:
-                # Get the last AI message
-                for msg in reversed(messages):
-                    if isinstance(msg, AIMessage):
-                        return msg.content
+            # messages = result.get("messages", [])
 
-            return "I couldn't generate a response."
+            # if messages:
+            #     # Get the last AI message
+            #     for msg in reversed(messages):
+            #         if isinstance(msg, AIMessage):
+            # return msg.content
+
+            content = result.get("vietnamese_output", "")
+
+            return content or "I couldn't generate a response."
 
         except Exception as e:
             if self.verbose:
@@ -287,6 +357,7 @@ Using map_drug_name_tool:
             "messages": [HumanMessage(content=input_text)],
             "input": input_text,
             "output": "",
+            "vietnamese_output": "",
             "intermediate_steps": [],
         }
 
@@ -297,6 +368,60 @@ Using map_drug_name_tool:
                 yield chunk
         except Exception as e:
             yield {"error": str(e)}
+
+    def invoke_with_translation(
+        self, input_text: str, thread_id: str = "default"
+    ) -> dict:
+        """
+        Invoke the agent with a question and get both English and Vietnamese responses.
+
+        Args:
+            input_text: User's question
+            thread_id: Conversation thread ID for memory
+
+        Returns:
+            Dictionary with 'english' and 'vietnamese' keys containing the responses
+        """
+        # Create initial state
+        initial_state = {
+            "messages": [HumanMessage(content=input_text)],
+            "input": input_text,
+            "output": "",
+            "vietnamese_output": "",
+            "intermediate_steps": [],
+        }
+
+        # Configure thread
+        config = {"configurable": {"thread_id": thread_id}}
+
+        try:
+            # Run the graph
+            result = self.app.invoke(initial_state, config)
+
+            # Extract the final message and Vietnamese translation
+            messages = result.get("messages", [])
+            vietnamese_output = result.get("vietnamese_output", "")
+
+            english_output = ""
+            if messages:
+                # Get the last AI message
+                for msg in reversed(messages):
+                    if isinstance(msg, AIMessage):
+                        english_output = msg.content
+                        break
+
+            return {
+                "english": english_output or "I couldn't generate a response.",
+                "vietnamese": vietnamese_output or "Không thể tạo phản hồi.",
+            }
+
+        except Exception as e:
+            if self.verbose:
+                print(f"Error in graph execution: {e}")
+            return {
+                "english": f"Error processing query: {str(e)}",
+                "vietnamese": f"Lỗi xử lý truy vấn: {str(e)}",
+            }
 
     def get_graph_stats(self) -> dict:
         """Get statistics about the drug interaction database."""

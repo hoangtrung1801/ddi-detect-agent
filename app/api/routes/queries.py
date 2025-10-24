@@ -10,6 +10,7 @@ from app.models import (
     ChatResponse,
     ErrorResponse,
 )
+from pydantic import BaseModel
 from app.core.agent import agent_manager
 from app.models.requests import DrugNamesFromImageRequest
 from app.models.responses import DrugNamesFromImageResponse
@@ -21,6 +22,14 @@ from app.core.cloudinary_utils import (
 )
 
 router = APIRouter()
+
+
+class TranslationResponse(BaseModel):
+    """Response model for translation endpoint."""
+
+    english: str
+    vietnamese: str
+    timestamp: str
 
 
 @router.post(
@@ -246,3 +255,41 @@ async def extract_drug_names_from_upload(
         #     except Exception as e:
         #         # Log the error but don't fail the request
         #         print(f"Warning: Failed to delete temporary image: {str(e)}")
+
+
+@router.post(
+    "/query-translate",
+    response_model=TranslationResponse,
+    summary="Query Drug Interactions with Vietnamese Translation",
+    description="Ask a question about drug interactions and get both English and Vietnamese responses",
+    tags=["Queries"],
+    responses={
+        200: {"description": "Successful response with translation"},
+        503: {"model": ErrorResponse, "description": "Agent not available"},
+    },
+)
+async def query_drug_interaction_with_translation(request: QueryRequest):
+    """
+    Query endpoint that returns both English and Vietnamese responses.
+    """
+    try:
+        agent = agent_manager.get_agent()
+    except RuntimeError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Agent not loaded"
+        )
+
+    try:
+        # Use the new translation method
+        result = agent.invoke_with_translation(request.question)
+
+        return TranslationResponse(
+            english=result["english"],
+            vietnamese=result["vietnamese"],
+            timestamp=datetime.now().isoformat(),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing query: {str(e)}",
+        )

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
     FileImage,
     Loader2,
@@ -93,7 +93,7 @@ export function MultiImageResults({
             <CardContent>
                 <div className="space-y-4">
                     {results.map((result, index) => (
-                        <>
+                        <Fragment key={result.file.name}>
                             <Card
                                 key={result.file.name}
                                 className="overflow-hidden"
@@ -253,7 +253,7 @@ export function MultiImageResults({
                                     </div>
                                 </div>
                             )}
-                        </>
+                        </Fragment>
                     ))}
                 </div>
 

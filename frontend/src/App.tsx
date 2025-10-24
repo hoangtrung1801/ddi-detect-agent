@@ -16,7 +16,6 @@ import {
     CardHeader,
     CardTitle,
 } from "./components/ui/card";
-import { extractTextFromImage } from "./lib/ocr";
 import { drugInteractionAPI } from "./lib/api";
 import "./App.css";
 
@@ -24,7 +23,6 @@ function App() {
     const [selectedImages, setSelectedImages] = useState<File[]>([]);
     const [imageResults, setImageResults] = useState<ImageResult[]>([]);
     const [detectedDrugs, setDetectedDrugs] = useState<string[]>([]);
-    const [ocrProgress, setOcrProgress] = useState(0);
     const [interactionResult, setInteractionResult] = useState<string>("");
     const [isProcessingImages, setIsProcessingImages] = useState(false);
 
@@ -38,23 +36,6 @@ function App() {
         },
         onError: (error) => {
             console.error("Drug extraction error:", error);
-        },
-    });
-
-    // OCR processing mutation (keeping for backward compatibility)
-    const ocrMutation = useMutation({
-        mutationFn: async (file: File) => {
-            setOcrProgress(0);
-            const result = await extractTextFromImage(file, setOcrProgress);
-            return result;
-        },
-        onSuccess: (data) => {
-            setDetectedDrugs(data.drugNames);
-            setOcrProgress(100);
-        },
-        onError: (error) => {
-            console.error("OCR Error:", error);
-            alert("Failed to process image. Please try again.");
         },
     });
 
@@ -81,70 +62,90 @@ function App() {
     });
 
     // Process multiple images
-    const processImages = useCallback(async (files: File[]) => {
-        setIsProcessingImages(true);
-        setImageResults([]);
-        setDetectedDrugs([]);
-        setInteractionResult("");
+    const processImages = useCallback(
+        async (files: File[]) => {
+            setIsProcessingImages(true);
+            // Don't clear existing results - append new ones
+            setInteractionResult("");
 
-        const newResults: ImageResult[] = files.map((file) => ({
-            file,
-            preview: URL.createObjectURL(file),
-            extractedIngredients: [],
-            isLoading: true,
-        }));
+            const newResults: ImageResult[] = files.map((file) => ({
+                file,
+                preview: URL.createObjectURL(file),
+                extractedIngredients: [],
+                isLoading: true,
+            }));
 
-        setImageResults(newResults);
+            setImageResults((prev) => [...prev, ...newResults]);
 
-        // Process each image
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            try {
-                // const result =
-                //     await drugInteractionAPI.extractDrugNamesFromImage(file);
-                const result = await drugExtractionMutation.mutateAsync(file);
-
-                setImageResults((prev) =>
-                    prev.map((imgResult, index) =>
-                        index === i
-                            ? {
-                                  ...imgResult,
-                                  extractedIngredients: result.result,
-                                  isLoading: false,
-                              }
-                            : imgResult
-                    )
-                );
-
-                // Add to detected drugs list
-                setDetectedDrugs((prev) => {
-                    const newDrugs = result.result.filter(
-                        (drug) => !prev.includes(drug)
+            // Process each image
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                try {
+                    // const result =
+                    //     await drugInteractionAPI.extractDrugNamesFromImage(file);
+                    const result = await drugExtractionMutation.mutateAsync(
+                        file
                     );
-                    return [...prev, ...newDrugs];
-                });
-            } catch (error) {
-                console.error(`Error processing ${file.name}:`, error);
-                setImageResults((prev) =>
-                    prev.map((imgResult, index) =>
-                        index === i
-                            ? {
-                                  ...imgResult,
-                                  isLoading: false,
-                                  error: "Failed to extract ingredients",
-                              }
-                            : imgResult
-                    )
-                );
-            }
-        }
 
-        setIsProcessingImages(false);
-    }, []);
+                    setImageResults((prev) =>
+                        prev.map((imgResult) =>
+                            imgResult.file.name === file.name
+                                ? {
+                                      ...imgResult,
+                                      extractedIngredients: result.result,
+                                      isLoading: false,
+                                  }
+                                : imgResult
+                        )
+                    );
+
+                    // Add to detected drugs list
+                    setDetectedDrugs((prev) => {
+                        const newDrugs = result.result.filter(
+                            (drug) => !prev.includes(drug)
+                        );
+                        return [...prev, ...newDrugs];
+                    });
+                } catch (error) {
+                    console.error(`Error processing ${file.name}:`, error);
+                    setImageResults((prev) =>
+                        prev.map((imgResult) =>
+                            imgResult.file.name === file.name
+                                ? {
+                                      ...imgResult,
+                                      isLoading: false,
+                                      error: "Failed to extract ingredients",
+                                  }
+                                : imgResult
+                        )
+                    );
+                }
+            }
+
+            setIsProcessingImages(false);
+        },
+        [drugExtractionMutation]
+    );
 
     const handleImageSelect = (files: File[]) => {
         setSelectedImages(files);
-        processImages(files);
+        // Don't process immediately - wait for user to click OK button
+    };
+
+    const handleStartExtraction = () => {
+        if (selectedImages.length > 0) {
+            // Only process images that haven't been processed yet
+            const processedFileNames = imageResults.map(
+                (result) => result.file.name
+            );
+            const unprocessedImages = selectedImages.filter(
+                (img) => !processedFileNames.includes(img.name)
+            );
+
+            if (unprocessedImages.length > 0) {
+                processImages(unprocessedImages);
+            }
+        }
     };
 
     const handleClearImages = () => {
@@ -152,7 +153,6 @@ function App() {
         setImageResults([]);
         setDetectedDrugs([]);
         setInteractionResult("");
-        setOcrProgress(0);
     };
 
     const handleRemoveImage = (fileName: string) => {
@@ -186,21 +186,6 @@ function App() {
         }
     };
 
-    // Legacy single image handler (keeping for backward compatibility)
-    const handleSingleImageSelect = (file: File) => {
-        setSelectedImages([file]);
-        setDetectedDrugs([]);
-        setInteractionResult("");
-        ocrMutation.mutate(file);
-    };
-
-    const handleClearImage = () => {
-        setSelectedImages([]);
-        setDetectedDrugs([]);
-        setInteractionResult("");
-        setOcrProgress(0);
-    };
-
     const handleRemoveDrug = (drug: string) => {
         setDetectedDrugs((prev) => prev.filter((d) => d !== drug));
         setInteractionResult("");
@@ -214,7 +199,7 @@ function App() {
         interactionMutation.mutate(detectedDrugs);
     };
 
-    const isProcessing = ocrMutation.isPending || isProcessingImages;
+    const isProcessing = isProcessingImages;
     const isCheckingInteractions = interactionMutation.isPending;
 
     return (
@@ -256,6 +241,33 @@ function App() {
                                 isProcessing={isProcessing}
                                 maxFiles={5}
                             />
+
+                            {/* OK Button to Start Extraction */}
+                            {selectedImages.length > imageResults.length &&
+                                !isProcessingImages && (
+                                    <div className="mt-4">
+                                        <Button
+                                            variant="default"
+                                            onClick={handleStartExtraction}
+                                            disabled={isProcessing}
+                                            className="w-full"
+                                            size="lg"
+                                        >
+                                            {imageResults.length === 0
+                                                ? "OK - Extract Drug Names"
+                                                : `Extract ${
+                                                      selectedImages.length -
+                                                      imageResults.length
+                                                  } More Image${
+                                                      selectedImages.length -
+                                                          imageResults.length >
+                                                      1
+                                                          ? "s"
+                                                          : ""
+                                                  }`}
+                                        </Button>
+                                    </div>
+                                )}
 
                             {/* Processing Progress */}
                             {isProcessingImages && (

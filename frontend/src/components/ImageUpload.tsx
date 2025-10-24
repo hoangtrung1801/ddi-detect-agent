@@ -1,6 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useRef } from "react";
 import { useDropzone } from "react-dropzone";
-import { Upload, X, FileImage, Plus } from "lucide-react";
+import { Upload, X, FileImage, Plus, Camera } from "lucide-react";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +20,7 @@ export function ImageUpload({
     maxFiles = 5,
 }: ImageUploadProps) {
     const [previews, setPreviews] = useState<{ [key: string]: string }>({});
+    const cameraInputRef = useRef<HTMLInputElement>(null);
 
     const onDrop = useCallback(
         (acceptedFiles: File[]) => {
@@ -69,10 +70,53 @@ export function ImageUpload({
         setPreviews(newPreviews);
     };
 
+    const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (files && files.length > 0) {
+            const fileArray = Array.from(files);
+            const newFiles = [...selectedImages, ...fileArray].slice(
+                0,
+                maxFiles
+            );
+            onImageSelect(newFiles);
+
+            // Create previews for new files
+            fileArray.forEach((file) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    setPreviews((prev) => ({
+                        ...prev,
+                        [file.name]: reader.result as string,
+                    }));
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+        // Reset input value to allow capturing the same image again
+        if (e.target) {
+            e.target.value = "";
+        }
+    };
+
+    const openCamera = () => {
+        cameraInputRef.current?.click();
+    };
+
     if (selectedImages.length > 0) {
         return (
             <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Hidden camera input */}
+                <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleCameraCapture}
+                    className="hidden"
+                    disabled={isProcessing || selectedImages.length >= maxFiles}
+                />
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {selectedImages.map((image, index) => (
                         <div
                             key={image.name}
@@ -111,30 +155,45 @@ export function ImageUpload({
                 </div>
 
                 {selectedImages.length < maxFiles && (
-                    <div
-                        {...getRootProps()}
-                        className={cn(
-                            "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
-                            isDragActive
-                                ? "border-primary bg-primary/5"
-                                : "border-gray-300 hover:border-gray-400",
-                            isProcessing && "opacity-50 cursor-not-allowed"
-                        )}
-                    >
-                        <input {...getInputProps()} />
-                        <div className="flex flex-col items-center justify-center gap-2">
-                            <div className="rounded-full bg-primary/10 p-4">
-                                <Plus className="h-6 w-6 text-primary" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div
+                            {...getRootProps()}
+                            className={cn(
+                                "border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors",
+                                isDragActive
+                                    ? "border-primary bg-primary/5"
+                                    : "border-gray-300 hover:border-gray-400",
+                                isProcessing && "opacity-50 cursor-not-allowed"
+                            )}
+                        >
+                            <input {...getInputProps()} />
+                            <div className="flex flex-col items-center justify-center gap-2">
+                                <div className="rounded-full bg-primary/10 p-4">
+                                    <Plus className="h-6 w-6 text-primary" />
+                                </div>
+                                <p className="text-sm font-medium">
+                                    {isDragActive
+                                        ? "Drop more images here"
+                                        : "Upload from files"}
+                                </p>
                             </div>
-                            <p className="text-sm font-medium">
-                                {isDragActive
-                                    ? "Drop more images here"
-                                    : "Add more images"}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                                {selectedImages.length} of {maxFiles} images
-                                uploaded
-                            </p>
+                        </div>
+
+                        <div
+                            onClick={openCamera}
+                            className={cn(
+                                "border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors border-gray-300 hover:border-gray-400",
+                                isProcessing && "opacity-50 cursor-not-allowed"
+                            )}
+                        >
+                            <div className="flex flex-col items-center justify-center gap-2">
+                                <div className="rounded-full bg-primary/10 p-4">
+                                    <Camera className="h-6 w-6 text-primary" />
+                                </div>
+                                <p className="text-sm font-medium">
+                                    Take photo
+                                </p>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -160,35 +219,62 @@ export function ImageUpload({
     }
 
     return (
-        <div
-            {...getRootProps()}
-            className={cn(
-                "border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors",
-                isDragActive
-                    ? "border-primary bg-primary/5"
-                    : "border-gray-300 hover:border-gray-400",
-                isProcessing && "opacity-50 cursor-not-allowed"
-            )}
-        >
-            <input {...getInputProps()} />
-            <div className="flex flex-col items-center justify-center gap-4">
-                <div className="rounded-full bg-primary/10 p-6">
-                    <Upload className="h-8 w-8 text-primary" />
+        <div className="space-y-4">
+            {/* Hidden camera input */}
+            <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleCameraCapture}
+                className="hidden"
+                disabled={isProcessing}
+            />
+
+            <div
+                {...getRootProps()}
+                className={cn(
+                    "border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors",
+                    isDragActive
+                        ? "border-primary bg-primary/5"
+                        : "border-gray-300 hover:border-gray-400",
+                    isProcessing && "opacity-50 cursor-not-allowed"
+                )}
+            >
+                <input {...getInputProps()} />
+                <div className="flex flex-col items-center justify-center gap-4">
+                    <div className="rounded-full bg-primary/10 p-6">
+                        <Upload className="h-8 w-8 text-primary" />
+                    </div>
+                    <div className="space-y-2">
+                        <p className="text-lg font-medium">
+                            {isDragActive
+                                ? "Drop the images here"
+                                : "Upload drug label images"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                            Drag and drop images, or click to select
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            Supports: PNG, JPG, JPEG, GIF, BMP (up to {maxFiles}{" "}
+                            images)
+                        </p>
+                    </div>
                 </div>
-                <div className="space-y-2">
-                    <p className="text-lg font-medium">
-                        {isDragActive
-                            ? "Drop the images here"
-                            : "Upload drug label images"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                        Drag and drop images, or click to select
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                        Supports: PNG, JPG, JPEG, GIF, BMP (up to {maxFiles}{" "}
-                        images)
-                    </p>
-                </div>
+            </div>
+
+            {/* Camera button */}
+            <div className="flex justify-center">
+                <Button
+                    variant="outline"
+                    onClick={openCamera}
+                    disabled={isProcessing}
+                    className="gap-2"
+                    type="button"
+                >
+                    <Camera className="h-4 w-4" />
+                    Take Photo with Camera
+                </Button>
             </div>
         </div>
     );

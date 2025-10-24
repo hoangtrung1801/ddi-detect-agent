@@ -124,6 +124,7 @@ class DrugNameMapper:
         # Find closest match using embeddings
         try:
             results = self._find_closest_drugs(cleaned_name, top_k, threshold)
+            print(f"drug_mapper - drug_name: {cleaned_name} results: {results}")
             if results:
                 return results[0][0]  # Return the drug name of the best match
         except Exception as e:

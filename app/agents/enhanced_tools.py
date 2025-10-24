@@ -4,32 +4,51 @@ Enhanced Drug Interaction Tools with Drug Mapping for LangGraph Agent.
 Extends the basic drug interaction tools with drug name mapping capabilities.
 """
 
-from typing import List, Optional
+from typing import List
+import importlib.util
 from langchain_core.tools import tool
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
 from drug_interaction_graph import DrugInteractionGraph
 
-# Import drug mapping tools
-try:
-    from .drug_name_mapper_tool import DRUG_MAPPING_TOOLS
+# Check if drug mapping is available
+DRUG_MAPPING_AVAILABLE = importlib.util.find_spec("app.core.drug_mapper") is not None
 
-    DRUG_MAPPING_AVAILABLE = True
-except ImportError:
-    DRUG_MAPPING_AVAILABLE = False
+
+class ActiveIngredientResponse(BaseModel):
+    """Response model for active ingredient extraction."""
+
+    reasoning: str = Field(..., description="Reasoning for the ingredient extraction")
+    active_ingredient: str = Field(
+        ..., description="The primary active ingredient or generic name"
+    )
+    confidence: str = Field(
+        ...,
+        description="Confidence level: high, medium, or low",
+    )
 
 
 class EnhancedDrugInteractionTools:
     """Enhanced collection of tools for querying drug interactions with mapping."""
 
-    def __init__(self, graph: DrugInteractionGraph, enable_drug_mapping: bool = True):
+    def __init__(
+        self,
+        graph: DrugInteractionGraph,
+        enable_drug_mapping: bool = True,
+        model_name: str = "gpt-4.1-nano-2025-04-14",
+    ):
         """
         Initialize enhanced tools with a drug interaction graph and optional mapping.
 
         Args:
             graph: DrugInteractionGraph instance with loaded data
             enable_drug_mapping: Whether to enable drug name mapping
+            model_name: LLM model to use for ingredient extraction
         """
         self.graph = graph
         self.enable_drug_mapping = enable_drug_mapping and DRUG_MAPPING_AVAILABLE
+        self.llm = ChatOpenAI(model=model_name, temperature=0.0)
 
     @staticmethod
     def _parse_two_drugs(query: str) -> tuple[str | None, str | None]:
@@ -53,9 +72,49 @@ class EnhancedDrugInteractionTools:
 
         return None, None
 
+    def _extract_active_ingredient(self, drug_name: str) -> tuple[str, str]:
+        """
+        Use LLM to extract the active ingredient from a drug name.
+
+        Args:
+            drug_name: The drug name (brand or generic)
+
+        Returns:
+            Tuple of (active_ingredient, reasoning)
+        """
+        system_prompt = """You are a pharmaceutical expert. Given a drug name (which could be a brand name, trade name, or generic name), identify the primary active ingredient or generic name.
+
+Instructions:
+- If given a brand name (e.g., "Tylenol", "Advil", "Coumadin"), return the generic/active ingredient name (e.g., "Acetaminophen", "Ibuprofen", "Warfarin")
+- If given a generic name already (e.g., "Acetaminophen", "Ibuprofen"), return it as-is
+- If the drug contains multiple active ingredients, return the PRIMARY one
+- Return ONLY the ingredient name, not dosage or formulation details
+- Use standard international non-proprietary names (INN) when possible
+- Provide brief reasoning for your answer
+
+Respond with high confidence if you're certain, medium if somewhat certain, low if unsure."""
+
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=f"Drug name: {drug_name}"),
+        ]
+
+        try:
+            llm_with_structured_output = self.llm.with_structured_output(
+                ActiveIngredientResponse
+            )
+            result: ActiveIngredientResponse = llm_with_structured_output.invoke(
+                messages
+            )
+            return result.active_ingredient, result.reasoning
+        except Exception as e:
+            print(f"Error extracting ingredient for '{drug_name}': {e}")
+            return drug_name, f"Error: {str(e)}"
+
     def _map_drug_name(self, drug_name: str) -> str:
         """
         Map a drug name to its standardized form if mapping is enabled.
+        First extracts active ingredient using LLM, then maps to database.
 
         Args:
             drug_name: The drug name to map
@@ -67,11 +126,21 @@ class EnhancedDrugInteractionTools:
             return drug_name
 
         try:
+            # Step 1: Extract active ingredient using LLM
+            active_ingredient, reasoning = self._extract_active_ingredient(drug_name)
+            print(f"LLM extracted ingredient: '{drug_name}' -> '{active_ingredient}'")
+            print(f"Reasoning: {reasoning}")
+
+            # Step 2: Map the extracted ingredient to database
             from ..core.drug_mapper import map_drug_name
 
-            mapped = map_drug_name(drug_name, threshold=0.7)
-            return mapped if mapped else drug_name
-        except Exception:
+            mapped = map_drug_name(active_ingredient, threshold=0.5)
+            final_name = mapped if mapped else active_ingredient
+
+            print(f"Database mapping: '{active_ingredient}' -> '{final_name}'")
+            return final_name
+        except Exception as e:
+            print(f"Error in drug mapping: {e}")
             return drug_name
 
     def create_tools(self) -> List:
@@ -86,14 +155,14 @@ class EnhancedDrugInteractionTools:
         @tool
         def search_drug_interaction(query: str) -> str:
             """
-            Search for interaction between two drugs with automatic drug name mapping.
+            Search for interaction between two drugs with automatic LLM-based mapping.
 
             Use this tool to find specific interactions between TWO drugs.
             Input should be two drug names separated by 'and', 'with', or comma.
-            Drug names will be automatically mapped to standardized forms.
+            Drug names will be converted to active ingredients via LLM, then mapped to database.
 
             Args:
-                query: Two drug names. Examples: "Warfarin and Aspirin", "tylenol, advil"
+                query: Two drug names. Examples: "Warfarin and Aspirin", "tylenol, advil", "Coumadin and Advil"
 
             Returns:
                 Interaction information or message if not found
@@ -108,29 +177,41 @@ class EnhancedDrugInteractionTools:
 
             # Map drug names if mapping is enabled
             original_drug1, original_drug2 = drug1, drug2
-            drug1 = self._map_drug_name(drug1)
-            drug2 = self._map_drug_name(drug2)
+            mapped_drug1 = self._map_drug_name(drug1)
+            mapped_drug2 = self._map_drug_name(drug2)
+
+            print(
+                f"enhanced_tools - mapped: '{drug1}' -> '{mapped_drug1}', '{drug2}' -> '{mapped_drug2}'"
+            )
 
             # Search in graph
-            result = graph.search_interaction(drug1, drug2)
+            result = graph.search_interaction(mapped_drug1, mapped_drug2)
+            print(f"enhanced_tools - interaction result: {result}")
 
-            # Build response with mapping information
+            # Build response with detailed mapping information
             response_parts = []
-            if drug1 != original_drug1:
-                response_parts.append(f"Mapped '{original_drug1}' to '{drug1}'")
-            if drug2 != original_drug2:
-                response_parts.append(f"Mapped '{original_drug2}' to '{drug2}'")
+
+            if mapped_drug1.lower() != original_drug1.lower():
+                response_parts.append(
+                    f"• Converted '{original_drug1}' → '{mapped_drug1}'"
+                )
+            if mapped_drug2.lower() != original_drug2.lower():
+                response_parts.append(
+                    f"• Converted '{original_drug2}' → '{mapped_drug2}'"
+                )
 
             if response_parts:
-                mapping_info = "Note: " + ", ".join(response_parts) + "\n\n"
+                mapping_info = (
+                    "Drug Conversions:\n" + "\n".join(response_parts) + "\n\n"
+                )
             else:
                 mapping_info = ""
 
             if result:
-                return f"{mapping_info}Interaction between {drug1.title()} and {drug2.title()}: {result}"
+                return f"{mapping_info}Interaction between {mapped_drug1.title()} and {mapped_drug2.title()}: {result}"
             else:
                 return (
-                    f"{mapping_info}No known interaction found between {drug1.title()} and {drug2.title()} "
+                    f"{mapping_info}No known interaction found between {mapped_drug1.title()} and {mapped_drug2.title()} "
                     f"in the database."
                 )
 
@@ -207,46 +288,54 @@ class EnhancedDrugInteractionTools:
         @tool
         def map_drug_name_tool(drug_name: str) -> str:
             """
-            Map a drug name to its standardized form.
+            Convert a drug name to its active ingredient and map it to the database.
 
-            Use this tool to check how a drug name would be mapped to the standardized form.
-            This is useful for understanding how the system interprets drug names.
+            This tool uses LLM to first identify the active ingredient (e.g., "Tylenol" -> "Acetaminophen"),
+            then maps it to the standardized form in the database.
 
             Args:
-                drug_name: The drug name to map
+                drug_name: The drug name to convert (can be brand name or generic)
 
             Returns:
-                Mapping result with confidence information
+                The standardized active ingredient name with conversion details
             """
             if not self.enable_drug_mapping:
                 return f"Drug mapping is not enabled. Original name: '{drug_name}'"
 
             try:
-                from ..core.drug_mapper import map_drug_name, get_drug_mapper
+                # Step 1: Extract active ingredient using LLM
+                active_ingredient, reasoning = self._extract_active_ingredient(
+                    drug_name
+                )
 
-                mapped_name = map_drug_name(drug_name, threshold=0.7)
-                mapper = get_drug_mapper()
+                # Step 2: Map to database
+                from ..core.drug_mapper import map_drug_name
 
-                if mapped_name and mapped_name != drug_name:
-                    # Get suggestions for context
-                    suggestions = mapper.get_drug_suggestions(
-                        drug_name, top_k=3, threshold=0.5
+                mapped_name = map_drug_name(active_ingredient, threshold=0.5)
+                final_name = mapped_name if mapped_name else active_ingredient
+
+                # Build detailed response
+                response_parts = []
+
+                if active_ingredient.lower() != drug_name.lower():
+                    response_parts.append(
+                        f"✓ LLM Conversion: '{drug_name}' → '{active_ingredient}'"
                     )
-                    confidence = (
-                        "high"
-                        if suggestions[0][1] > 0.8
-                        else "medium" if suggestions[0][1] > 0.6 else "low"
+                    response_parts.append(f"  Reasoning: {reasoning}")
+
+                if mapped_name and mapped_name.lower() != active_ingredient.lower():
+                    response_parts.append(
+                        f"✓ Database Mapping: '{active_ingredient}' → '{mapped_name}'"
                     )
 
-                    result = f"Mapped '{drug_name}' to '{mapped_name}' (confidence: {confidence})"
-                    if len(suggestions) > 1:
-                        alternatives = [
-                            f"{name} ({score:.3f})" for name, score in suggestions[1:]
-                        ]
-                        result += f"\nAlternatives: {', '.join(alternatives)}"
-                    return result
+                if response_parts:
+                    result = "\n".join(response_parts)
+                    result += f"\n\n✓ Final Name: '{final_name}'"
                 else:
-                    return f"No mapping found for '{drug_name}'. Using original name."
+                    result = f"✓ Final Name: '{final_name}' (already in standard form)"
+
+                return result
+
             except Exception as e:
                 return f"Error mapping drug name '{drug_name}': {str(e)}"
 
@@ -288,8 +377,8 @@ class EnhancedDrugInteractionTools:
         # Create base tools
         base_tools = [
             search_drug_interaction,
-            get_all_drug_interactions,
-            get_drug_statistics,
+            # get_all_drug_interactions,
+            # get_drug_statistics,
         ]
 
         # Add mapping tools if available
@@ -297,7 +386,7 @@ class EnhancedDrugInteractionTools:
             base_tools.extend(
                 [
                     map_drug_name_tool,
-                    get_drug_suggestions_tool,
+                    # get_drug_suggestions_tool,
                 ]
             )
 

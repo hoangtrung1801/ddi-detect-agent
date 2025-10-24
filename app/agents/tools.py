@@ -67,6 +67,7 @@ class DrugInteractionTools:
                 Interaction information or message if not found
             """
             drug1, drug2 = DrugInteractionTools._parse_two_drugs(query)
+            print(f"drug1: {drug1}, drug2: {drug2}")
 
             if not drug1 or not drug2:
                 return (
@@ -142,6 +143,6 @@ class DrugInteractionTools:
 
         return [
             search_drug_interaction,
-            get_all_drug_interactions,
-            get_drug_statistics,
+            # get_all_drug_interactions,
+            # get_drug_statistics,
         ]

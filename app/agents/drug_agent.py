@@ -89,7 +89,8 @@ class DrugInteractionAgent:
             graph=graph,
             model_name=model_name,
             # temperature=temperature,
-            verbose=verbose,
+            # verbose=verbose,
+            verbose=True,
             enable_drug_mapping=enable_drug_mapping,
         )
 
@@ -104,6 +105,7 @@ class DrugInteractionAgent:
             Agent's response as a string
         """
         try:
+            print(f"Question: {question}")
             response = self.agent_graph.invoke(question, thread_id=self.thread_id)
             return response
         except Exception as e:

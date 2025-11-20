@@ -52,17 +52,15 @@ export function MultiImageResults({
 
     const getStatusText = (result: ImageResult) => {
         if (result.isLoading) {
-            return "Processing...";
+            return "Đang xử lý...";
         }
         if (result.error) {
-            return "Error";
+            return "Lỗi";
         }
         if (result.extractedIngredients.length > 0) {
-            return `${result.extractedIngredients.length} ingredient${
-                result.extractedIngredients.length !== 1 ? "s" : ""
-            } found`;
+            return `${result.extractedIngredients.length} thành phần đã tìm thấy`;
         }
-        return "No ingredients found";
+        return "Không tìm thấy thành phần";
     };
 
     const getStatusColor = (result: ImageResult) => {
@@ -85,9 +83,12 @@ export function MultiImageResults({
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Step 2: Extracted Active Ingredients</CardTitle>
+                <CardTitle>
+                    Bước 2: Thành Phần Hoạt Chất Đã Trích Xuất
+                </CardTitle>
                 <CardDescription>
-                    Review the active ingredients extracted from each drug image
+                    Xem lại các thành phần hoạt chất được trích xuất từ mỗi hình
+                    ảnh thuốc
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -104,7 +105,7 @@ export function MultiImageResults({
                                         <div className="w-32 h-32 shrink-0 relative">
                                             <img
                                                 src={result.preview}
-                                                alt={`Drug label ${index + 1}`}
+                                                alt={`Nhãn thuốc ${index + 1}`}
                                                 className="w-full h-full object-cover cursor-pointer"
                                                 onClick={() =>
                                                     setExpandedImage(
@@ -164,8 +165,8 @@ export function MultiImageResults({
                                                         .length > 0 && (
                                                         <div className="space-y-2">
                                                             <p className="text-sm font-medium text-muted-foreground">
-                                                                Active
-                                                                Ingredients:
+                                                                Thành Phần Hoạt
+                                                                Chất:
                                                             </p>
                                                             <div className="flex flex-wrap gap-1">
                                                                 {result.extractedIngredients.map(
@@ -204,7 +205,7 @@ export function MultiImageResults({
                                                                 )
                                                             }
                                                         >
-                                                            Retry
+                                                            Thử Lại
                                                         </Button>
                                                     )}
                                                     <Button
@@ -216,7 +217,7 @@ export function MultiImageResults({
                                                             )
                                                         }
                                                     >
-                                                        Remove
+                                                        Xóa
                                                     </Button>
                                                 </div>
                                             </div>
@@ -240,13 +241,13 @@ export function MultiImageResults({
                                                     setExpandedImage(null)
                                                 }
                                             >
-                                                Close
+                                                Đóng
                                             </Button>
                                         </div>
                                         <div className="p-4">
                                             <img
                                                 src={result.preview}
-                                                alt={`Expanded view of ${result.file.name}`}
+                                                alt={`Chế độ xem mở rộng của ${result.file.name}`}
                                                 className="max-w-full h-auto"
                                             />
                                         </div>
@@ -261,10 +262,10 @@ export function MultiImageResults({
                 <div className="mt-4 p-4 bg-muted/50 rounded-lg">
                     <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">
-                            Total images: {results.length}
+                            Tổng số hình ảnh: {results.length}
                         </span>
                         <span className="text-muted-foreground">
-                            Successfully processed:{" "}
+                            Đã xử lý thành công:{" "}
                             {
                                 results.filter(
                                     (r) =>

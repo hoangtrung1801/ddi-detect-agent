@@ -19,12 +19,12 @@ export function InteractionResults({
                 <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                        Analyzing Interactions...
+                        Đang Phân Tích Tương Tác...
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
                     <p className="text-sm text-muted-foreground">
-                        Checking for drug interactions in our database...
+                        Đang kiểm tra tương tác thuốc trong cơ sở dữ liệu...
                     </p>
                 </CardContent>
             </Card>
@@ -39,18 +39,18 @@ export function InteractionResults({
     const getSeverity = (text: string): "info" | "warning" | "safe" => {
         const lowerText = text.toLowerCase();
         if (
-            lowerText.includes("no interaction") ||
-            lowerText.includes("no known interaction") ||
-            lowerText.includes("safe")
+            lowerText.includes("không tương tác") ||
+            lowerText.includes("không có tương tác") ||
+            lowerText.includes("an toàn")
         ) {
             return "safe";
         }
         if (
-            lowerText.includes("severe") ||
-            lowerText.includes("dangerous") ||
-            lowerText.includes("contraindicated") ||
-            lowerText.includes("bleeding") ||
-            lowerText.includes("toxicity")
+            lowerText.includes("nghiêm trọng") ||
+            lowerText.includes("nguy hiểm") ||
+            lowerText.includes("chống chỉ định") ||
+            lowerText.includes("chảy máu") ||
+            lowerText.includes("độc tính")
         ) {
             return "warning";
         }
@@ -73,11 +73,11 @@ export function InteractionResults({
     const getTitle = () => {
         switch (severity) {
             case "safe":
-                return "No Interactions Found";
+                return "Không Tìm Thấy Tương Tác";
             case "warning":
-                return "Interaction Warning";
+                return "Cảnh Báo Tương Tác";
             default:
-                return "Interaction Information";
+                return "Thông Tin Tương Tác";
         }
     };
 

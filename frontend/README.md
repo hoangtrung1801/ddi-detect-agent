@@ -1,17 +1,17 @@
-# Drug Interaction Checker - Frontend
+# Kiểm Tra Tương Tác Thuốc - Frontend
 
-A modern React web application for detecting drug interactions from medication label images using OCR and AI.
+Ứng dụng web React hiện đại để phát hiện tương tác thuốc từ hình ảnh nhãn thuốc sử dụng OCR và AI.
 
-## Features
+## Tính Năng
 
-- 📸 **Image Upload**: Drag-and-drop or click to upload medication label images
-- 🔍 **OCR Processing**: Automatically extract drug names from images using Tesseract.js
-- 💊 **Drug Detection**: Smart extraction of drug names from OCR text
-- ⚠️ **Interaction Analysis**: Check for drug interactions using AI-powered backend
-- 🎨 **Modern UI**: Beautiful, responsive interface built with Tailwind CSS and shadcn/ui
-- ⚡ **Real-time Feedback**: Progress indicators and loading states
+- 📸 **Tải Lên Hình Ảnh**: Kéo thả hoặc nhấp để tải lên hình ảnh nhãn thuốc
+- 🔍 **Xử Lý OCR**: Tự động trích xuất tên thuốc từ hình ảnh bằng Tesseract.js
+- 💊 **Phát Hiện Thuốc**: Trích xuất thông minh tên thuốc từ văn bản OCR
+- ⚠️ **Phân Tích Tương Tác**: Kiểm tra tương tác thuốc bằng backend AI
+- 🎨 **Giao Diện Hiện Đại**: Giao diện đẹp, phản hồi được xây dựng với Tailwind CSS và shadcn/ui
+- ⚡ **Phản Hồi Thời Gian Thực**: Chỉ báo tiến trình và trạng thái tải
 
-## Tech Stack
+## Công Nghệ Sử Dụng
 
 - **Framework**: React 18 + TypeScript
 - **Build Tool**: Vite
@@ -22,73 +22,73 @@ A modern React web application for detecting drug interactions from medication l
 - **HTTP Client**: Axios
 - **File Upload**: React Dropzone
 
-## Prerequisites
+## Yêu Cầu Hệ Thống
 
-- Node.js 18+ or pnpm
-- Backend API running on `http://localhost:8000` (see parent directory)
+- Node.js 18+ hoặc pnpm
+- Backend API đang chạy trên `http://localhost:8000` (xem thư mục cha)
 
-## Installation
+## Cài Đặt
 
 ```bash
-# Install dependencies
+# Cài đặt dependencies
 pnpm install
 
-# or with npm
+# hoặc với npm
 npm install
 ```
 
-## Development
+## Phát Triển
 
 ```bash
-# Start development server
+# Khởi động development server
 pnpm dev
 
-# or with npm
+# hoặc với npm
 npm run dev
 ```
 
-The app will be available at `http://localhost:5173`
+Ứng dụng sẽ có sẵn tại `http://localhost:5173`
 
-## Building for Production
+## Build Cho Production
 
 ```bash
-# Build the app
+# Build ứng dụng
 pnpm build
 
-# Preview the production build
+# Xem trước production build
 pnpm preview
 ```
 
-## Project Structure
+## Cấu Trúc Dự Án
 
 ```
 src/
 ├── components/          # React components
 │   ├── ui/             # shadcn/ui components
-│   ├── ImageUpload.tsx # Image upload with drag-and-drop
-│   ├── DrugList.tsx    # Detected drugs list
-│   └── InteractionResults.tsx # Results display
-├── lib/                # Utilities and services
+│   ├── ImageUpload.tsx # Tải lên hình ảnh với drag-and-drop
+│   ├── DrugList.tsx    # Danh sách thuốc đã phát hiện
+│   └── InteractionResults.tsx # Hiển thị kết quả
+├── lib/                # Utilities và services
 │   ├── api.ts         # API client
-│   ├── ocr.ts         # OCR processing with Tesseract.js
+│   ├── ocr.ts         # Xử lý OCR với Tesseract.js
 │   └── utils.ts       # Utility functions
-├── App.tsx            # Main application component
-├── main.tsx           # Application entry point
+├── App.tsx            # Component ứng dụng chính
+├── main.tsx           # Entry point của ứng dụng
 └── index.css          # Global styles
 ```
 
-## How It Works
+## Cách Hoạt Động
 
-1. **Upload Image**: User uploads a photo of medication labels
-2. **OCR Processing**: Tesseract.js extracts text from the image
-3. **Drug Detection**: Smart algorithm identifies drug names from the text
-4. **Review & Edit**: User can remove incorrectly detected drugs
-5. **Check Interactions**: Query the backend AI agent for drug interactions
-6. **View Results**: Display interaction warnings with severity indicators
+1. **Tải Lên Hình Ảnh**: Người dùng tải lên ảnh nhãn thuốc
+2. **Xử Lý OCR**: Tesseract.js trích xuất văn bản từ hình ảnh
+3. **Phát Hiện Thuốc**: Thuật toán thông minh xác định tên thuốc từ văn bản
+4. **Xem Lại & Chỉnh Sửa**: Người dùng có thể xóa các thuốc được phát hiện không chính xác
+5. **Kiểm Tra Tương Tác**: Truy vấn backend AI agent để kiểm tra tương tác thuốc
+6. **Xem Kết Quả**: Hiển thị cảnh báo tương tác với chỉ báo mức độ nghiêm trọng
 
-## API Integration
+## Tích Hợp API
 
-The frontend communicates with the backend FastAPI server through a proxy configured in `vite.config.ts`:
+Frontend giao tiếp với backend FastAPI server thông qua proxy được cấu hình trong `vite.config.ts`:
 
 ```typescript
 server: {
@@ -102,21 +102,21 @@ server: {
 }
 ```
 
-### API Endpoints Used
+### API Endpoints Được Sử Dụng
 
-- `POST /api/query` - Query for drug interactions
-- `GET /api/stats` - Get database statistics
-- `GET /api/health` - Health check
+- `POST /api/query` - Truy vấn tương tác thuốc
+- `GET /api/stats` - Lấy thống kê cơ sở dữ liệu
+- `GET /api/health` - Kiểm tra sức khỏe
 
-## Environment Variables
+## Biến Môi Trường
 
-No environment variables are required for the frontend. The backend URL is proxied through Vite.
+Không cần biến môi trường nào cho frontend. URL backend được proxy thông qua Vite.
 
-## Customization
+## Tùy Chỉnh
 
-### Adding New UI Components
+### Thêm UI Components Mới
 
-Use shadcn/ui CLI to add components:
+Sử dụng shadcn/ui CLI để thêm components:
 
 ```bash
 npx shadcn@latest add [component-name]
@@ -124,57 +124,57 @@ npx shadcn@latest add [component-name]
 
 ### Styling
 
-- Modify `tailwind.config.js` for theme customization
-- Update CSS variables in `src/index.css` for color schemes
-- Components use `cn()` utility for conditional classes
+- Sửa đổi `tailwind.config.js` để tùy chỉnh theme
+- Cập nhật CSS variables trong `src/index.css` cho color schemes
+- Components sử dụng `cn()` utility cho conditional classes
 
-## OCR Accuracy
+## Độ Chính Xác OCR
 
-The OCR accuracy depends on:
-- Image quality (higher resolution is better)
-- Text clarity and contrast
-- Proper lighting in the photo
-- Drug name formatting (capitalized names work best)
+Độ chính xác OCR phụ thuộc vào:
+- Chất lượng hình ảnh (độ phân giải cao hơn tốt hơn)
+- Độ rõ nét và tương phản của văn bản
+- Ánh sáng phù hợp trong ảnh
+- Định dạng tên thuốc (tên viết hoa hoạt động tốt nhất)
 
-**Tips for better results:**
-- Take photos in good lighting
-- Ensure text is clear and focused
-- Avoid glare or shadows
-- Crop to show only the medication label
+**Mẹo để có kết quả tốt hơn:**
+- Chụp ảnh trong ánh sáng tốt
+- Đảm bảo văn bản rõ ràng và tập trung
+- Tránh ánh sáng chói hoặc bóng tối
+- Cắt để chỉ hiển thị nhãn thuốc
 
-## Known Limitations
+## Hạn Chế Đã Biết
 
-- OCR may not detect all drug names correctly
-- User should review detected drugs before checking interactions
-- Requires backend server to be running
-- Large images may take longer to process
+- OCR có thể không phát hiện đúng tất cả tên thuốc
+- Người dùng nên xem lại các thuốc đã phát hiện trước khi kiểm tra tương tác
+- Cần backend server đang chạy
+- Hình ảnh lớn có thể mất nhiều thời gian xử lý hơn
 
-## Troubleshooting
+## Khắc Phục Sự Cố
 
-### OCR not working
-- Check browser console for errors
-- Ensure image format is supported (PNG, JPG, JPEG, GIF, BMP)
-- Try a clearer, higher quality image
+### OCR không hoạt động
+- Kiểm tra browser console để tìm lỗi
+- Đảm bảo định dạng hình ảnh được hỗ trợ (PNG, JPG, JPEG, GIF, BMP)
+- Thử hình ảnh rõ ràng, chất lượng cao hơn
 
-### API errors
-- Ensure backend server is running on `http://localhost:8000`
-- Check backend logs for errors
-- Verify CORS is properly configured
+### Lỗi API
+- Đảm bảo backend server đang chạy trên `http://localhost:8000`
+- Kiểm tra backend logs để tìm lỗi
+- Xác minh CORS được cấu hình đúng
 
-### Build errors
-- Clear `node_modules` and reinstall: `pnpm install --force`
-- Check Node.js version (18+ required)
-- Update dependencies: `pnpm update`
+### Lỗi Build
+- Xóa `node_modules` và cài đặt lại: `pnpm install --force`
+- Kiểm tra phiên bản Node.js (cần 18+)
+- Cập nhật dependencies: `pnpm update`
 
-## Contributing
+## Đóng Góp
 
-When adding new features:
-1. Follow the existing code structure
-2. Use TypeScript for type safety
-3. Add proper error handling
-4. Test with various image types
-5. Update this README
+Khi thêm tính năng mới:
+1. Tuân theo cấu trúc code hiện có
+2. Sử dụng TypeScript để đảm bảo type safety
+3. Thêm xử lý lỗi phù hợp
+4. Test với các loại hình ảnh khác nhau
+5. Cập nhật README này
 
-## License
+## Giấy Phép
 
-MIT License - see parent directory for details
+MIT License - xem thư mục cha để biết chi tiết

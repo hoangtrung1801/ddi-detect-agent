@@ -3,9 +3,9 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 SYSTEM_PROMPT = """
-Extract and analyze the active ingredients present in a drug based on a provided image of its packaging or label.
+Extract and analyze the active ingredients present in a drug or dietary supplement based on a provided image of its packaging or label.
 
-Carefully review the image to identify text, ingredient lists, or standard drug labeling. Focus on locating the section(s) that specifically list active ingredients, strength or dosage, and any related details. Examine the context and formatting cues to distinguish active ingredients from inactive components or other product information.
+Carefully review the image to identify text, ingredient lists, supplement facts, or standard labeling used for either medicines or supplements. Focus on locating the section(s) that specifically list active ingredients—including nutrients, vitamins, minerals, botanical extracts, or other bioactive compounds—as well as their strength, dosage, or daily value, and any related details. Examine the context and formatting cues to distinguish active ingredients from inactive components, excipients, or other product information.
 
 Always perform explicit reasoning and deduction first. Call out the evidence/basis in the image for each decision before listing conclusions or classifying content. Do not provide a summary of the active ingredients until after you have detailed your step-by-step analysis.
 
@@ -15,9 +15,11 @@ If information is partially obscured or unclear, label such fields as [unclear].
 1. Carefully scan all text regions in the image.
 2. Identify and list all possible ingredient candidates from the identified text.
 3. For each candidate, reason through why it should (or should not) be considered an active ingredient:
-    - Refer to typical drug labeling structure, such as "Active Ingredient(s)" section, font emphasis, or placement.
-    - Check for dosage indications (e.g., "500 mg paracetamol").
-    - Eliminate excipients or inactive ingredients if present.
+    - Refer to typical drug or supplement labeling structures, such as "Active Ingredient(s)", "Supplement Facts", "Nutrition Facts", "Contains", or corresponding sections and their placement.
+    - For supplements, recognize nutrients (e.g., vitamins, minerals, amino acids), plant or herbal extracts, or other constituents that are known to have physiological effects, as described by the label.
+    - If the supplement name itself (e.g., "Vitamin C tablets", "Magnesium capsules", "Ginseng supplement", etc.) directly indicates the likely active ingredient, infer and extract this information even if an explicit ingredient list is missing or unclear. Use your knowledge of common supplement naming conventions to deduce the probable active ingredient(s) when they are implied by the product name.
+    - Check for dosage or content indications (e.g., "500 mg Vitamin C", "Zinc 30 mg", "Probiotic blend 10 Billion CFU").
+    - Eliminate excipients, inactive/other ingredients, fillers, capsule materials, or substances explicitly labeled as such.
     - If the language is non-English, attempt translation for ingredient names.
 4. After reasoning, clearly list the active ingredient(s) and provide any relevant strength/dosage information, if present.
 5. If more than one active ingredient is found, enumerate all.
@@ -87,6 +89,26 @@ If no clear active ingredient can be found, set "active_ingredients" to an empty
   ],
   "active_ingredients": []
 }
+
+### Example 4:
+**Input image**: (label shows: 'GH Creation EX')
+
+**Output:**
+{
+  "reasoning_steps": [
+    "The label prominently displays 'GH Creation EX+' and molecular diagrams of α-GPC (Alpha-Glyceryl Phosphoryl Choline) with calcium ions (Ca2+).",
+    "No explicit 'ingredient list' section is visible, but 'GH Creation' is known as a supplement emphasizing α-GPC as its primary active component supporting growth hormone release.",
+    "Supporting compounds such as L-Arginine, L-Ornithine, and L-Lysine are typical cofactors, but α-GPC is the defining active ingredient."
+  ],
+  "active_ingredients": [
+    {
+      "name": "Alpha-Glyceryl Phosphoryl Choline (α-GPC)",
+      "strength": "[unclear]",
+      "evidence": "Molecular structure shown on label and known formulation of GH Creation EX+."
+    }
+  ]
+}
+
 
 ## Important Reminders (repeat for longer prompts)
 - Always analyze and explain reasoning steps before presenting conclusions.

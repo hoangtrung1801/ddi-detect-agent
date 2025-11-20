@@ -1,0 +1,31 @@
+drug1,drug2,condition
+Warfarin,Aspirin,Increased bleeding risk
+Warfarin,Ibuprofen,Increased bleeding risk
+Aspirin,Ibuprofen,Gastrointestinal bleeding
+Metformin,Alcohol,Lactic acidosis risk
+Lisinopril,Potassium supplements,Hyperkalemia
+Simvastatin,Grapefruit juice,Increased statin levels
+Methotrexate,NSAIDs,Methotrexate toxicity
+Digoxin,Amiodarone,Digoxin toxicity
+Warfarin,Amiodarone,Increased INR
+Clarithromycin,Simvastatin,Rhabdomyolysis risk
+Fluoxetine,MAOIs,Serotonin syndrome
+Clopidogrel,Omeprazole,Reduced antiplatelet effect
+Levothyroxine,Calcium carbonate,Reduced thyroid hormone absorption
+Ciprofloxacin,Theophylline,Theophylline toxicity
+Metformin,Contrast dye,Acute kidney injury
+ACE inhibitors,NSAIDs,Reduced antihypertensive effect
+Lithium,Thiazide diuretics,Lithium toxicity
+Tamoxifen,Paroxetine,Reduced tamoxifen efficacy
+Ketoconazole,Warfarin,Increased bleeding risk
+Rifampin,Oral contraceptives,Reduced contraceptive efficacy
+Allopurinol,Azathioprine,Bone marrow suppression
+Phenytoin,Warfarin,Unpredictable anticoagulation
+Carbamazepine,Doxycycline,Reduced antibiotic levels
+Sildenafil,Nitrates,Severe hypotension
+Monoamine oxidase inhibitors,Tyramine-rich foods,Hypertensive crisis
+Metronidazole,Alcohol,Disulfiram-like reaction
+Tetracycline,Dairy products,Reduced antibiotic absorption
+Alendronate,Calcium supplements,Reduced bisphosphonate absorption
+Quinolones,Antacids,Reduced quinolone absorption
+St. John's Wort,Oral contraceptives,Breakthrough bleeding

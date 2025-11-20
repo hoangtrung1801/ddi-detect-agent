@@ -56,7 +56,7 @@ function App() {
         onError: (error) => {
             console.error("API Error:", error);
             alert(
-                "Failed to check interactions. Please make sure the backend is running."
+                "Không thể kiểm tra tương tác. Vui lòng đảm bảo backend đang chạy."
             );
         },
     });
@@ -114,7 +114,7 @@ function App() {
                                 ? {
                                       ...imgResult,
                                       isLoading: false,
-                                      error: "Failed to extract ingredients",
+                                      error: "Không thể trích xuất thành phần",
                                   }
                                 : imgResult
                         )
@@ -193,7 +193,7 @@ function App() {
 
     const handleCheckInteractions = () => {
         if (detectedDrugs.length === 0) {
-            alert("Please upload an image with drug names first.");
+            alert("Vui lòng tải lên hình ảnh có tên thuốc trước.");
             return;
         }
         interactionMutation.mutate(detectedDrugs);
@@ -212,13 +212,12 @@ function App() {
                             <Pill className="h-8 w-8 text-primary" />
                         </div>
                         <h1 className="text-4xl font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                            Drug Interaction Checker
+                            Kiểm Tra Tương Tác Thuốc
                         </h1>
                     </div>
                     <p className="text-muted-foreground text-lg">
-                        Upload images of your medication labels to extract
-                        active ingredients and check for potential drug
-                        interactions
+                        Tải lên hình ảnh nhãn thuốc để trích xuất thành phần
+                        hoạt chất và kiểm tra các tương tác thuốc tiềm ẩn
                     </p>
                 </div>
 
@@ -227,10 +226,10 @@ function App() {
                     {/* Upload Section */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Step 1: Upload Images</CardTitle>
+                            <CardTitle>Bước 1: Tải Lên Hình Ảnh</CardTitle>
                             <CardDescription>
-                                Upload images of your medication labels to
-                                extract active ingredients
+                                Tải lên hình ảnh nhãn thuốc để trích xuất thành
+                                phần hoạt chất
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -254,17 +253,11 @@ function App() {
                                             size="lg"
                                         >
                                             {imageResults.length === 0
-                                                ? "OK - Extract Drug Names"
-                                                : `Extract ${
+                                                ? "OK - Trích Xuất Tên Thuốc"
+                                                : `Trích xuất ${
                                                       selectedImages.length -
                                                       imageResults.length
-                                                  } More Image${
-                                                      selectedImages.length -
-                                                          imageResults.length >
-                                                      1
-                                                          ? "s"
-                                                          : ""
-                                                  }`}
+                                                  } hình ảnh nữa`}
                                         </Button>
                                     </div>
                                 )}
@@ -274,7 +267,7 @@ function App() {
                                 <div className="mt-4 space-y-2">
                                     <div className="flex items-center justify-between text-sm">
                                         <span className="text-muted-foreground">
-                                            Processing images...
+                                            Đang xử lý hình ảnh...
                                         </span>
                                         <span className="font-medium">
                                             {
@@ -282,7 +275,8 @@ function App() {
                                                     (r) => !r.isLoading
                                                 ).length
                                             }{" "}
-                                            of {selectedImages.length} completed
+                                            trong {selectedImages.length} đã
+                                            hoàn thành
                                         </span>
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-2">
@@ -331,11 +325,11 @@ function App() {
                             <Card>
                                 <CardHeader>
                                     <CardTitle>
-                                        Step 2: Check Interactions
+                                        Bước 2: Kiểm Tra Tương Tác
                                     </CardTitle>
                                     <CardDescription>
-                                        Analyze the detected drugs for potential
-                                        interactions
+                                        Phân tích các thuốc đã phát hiện để tìm
+                                        các tương tác tiềm ẩn
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent>
@@ -352,16 +346,10 @@ function App() {
                                         {isCheckingInteractions ? (
                                             <>
                                                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                                                Checking Interactions...
+                                                Đang Kiểm Tra Tương Tác...
                                             </>
                                         ) : (
-                                            `Check Interactions for ${
-                                                detectedDrugs.length
-                                            } Drug${
-                                                detectedDrugs.length !== 1
-                                                    ? "s"
-                                                    : ""
-                                            }`
+                                            `Kiểm Tra Tương Tác cho ${detectedDrugs.length} Thuốc`
                                         )}
                                     </Button>
                                 </CardContent>
@@ -382,15 +370,15 @@ function App() {
                                 <div className="text-blue-600 mt-1">ℹ️</div>
                                 <div className="text-sm text-blue-900">
                                     <p className="font-medium mb-1">
-                                        Important Notice
+                                        Thông Báo Quan Trọng
                                     </p>
                                     <p className="text-blue-800">
-                                        This tool is for informational purposes
-                                        only. Always consult with a healthcare
-                                        professional before making any changes
-                                        to your medication regimen. This is not
-                                        a substitute for professional medical
-                                        advice.
+                                        Công cụ này chỉ mang tính chất tham
+                                        khảo. Luôn tham khảo ý kiến của chuyên
+                                        gia y tế trước khi thay đổi bất kỳ chế
+                                        độ dùng thuốc nào. Đây không phải là
+                                        thay thế cho lời khuyên y tế chuyên
+                                        nghiệp.
                                     </p>
                                 </div>
                             </div>

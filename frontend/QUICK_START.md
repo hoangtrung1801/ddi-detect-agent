@@ -1,117 +1,117 @@
-# Quick Start Guide
+# Hướng Dẫn Bắt Đầu Nhanh
 
-Get the Drug Interaction Checker frontend up and running in minutes!
+Khởi động frontend Kiểm Tra Tương Tác Thuốc trong vài phút!
 
-## Prerequisites
+## Yêu Cầu Hệ Thống
 
-- Node.js 18+ or pnpm installed
-- Backend API running (see parent directory setup)
+- Node.js 18+ hoặc pnpm đã cài đặt
+- Backend API đang chạy (xem thiết lập thư mục cha)
 
-## 1. Install Dependencies
+## 1. Cài Đặt Dependencies
 
 ```bash
 pnpm install
 ```
 
-## 2. Start Development Server
+## 2. Khởi Động Development Server
 
 ```bash
 pnpm dev
 ```
 
-The app will open at `http://localhost:5173`
+Ứng dụng sẽ mở tại `http://localhost:5173`
 
-## 3. Ensure Backend is Running
+## 3. Đảm Bảo Backend Đang Chạy
 
-In a separate terminal, from the parent directory:
+Trong terminal riêng biệt, từ thư mục cha:
 
 ```bash
-# Make sure you have .env configured with OPENAI_API_KEY
+# Đảm bảo bạn đã cấu hình .env với OPENAI_API_KEY
 cd ..
 python app/main.py
 ```
 
-Backend should be running at `http://localhost:8000`
+Backend sẽ chạy tại `http://localhost:8000`
 
-## 4. Test the Application
+## 4. Test Ứng Dụng
 
-1. Open `http://localhost:5173` in your browser
-2. Upload an image of medication labels (or use a sample image)
-3. Wait for OCR processing to detect drug names
-4. Review and remove any incorrect detections
-5. Click "Check Interactions" to see results
+1. Mở `http://localhost:5173` trong trình duyệt
+2. Tải lên hình ảnh nhãn thuốc (hoặc sử dụng hình ảnh mẫu)
+3. Chờ xử lý OCR để phát hiện tên thuốc
+4. Xem lại và xóa các phát hiện không chính xác
+5. Nhấp "Kiểm Tra Tương Tác" để xem kết quả
 
-## Sample Test
+## Test Mẫu
 
-You can test with a simple text image containing drug names like:
+Bạn có thể test với hình ảnh văn bản đơn giản chứa tên thuốc như:
 - Warfarin
 - Aspirin
 - Metformin
 
-Or use your phone to take a photo of actual medication labels.
+Hoặc sử dụng điện thoại để chụp ảnh nhãn thuốc thực tế.
 
-## Common Issues
+## Vấn Đề Thường Gặp
 
-### Port Already in Use
+### Port Đã Được Sử Dụng
 
-If port 5173 is busy:
+Nếu port 5173 đang bận:
 ```bash
 pnpm dev -- --port 3000
 ```
 
-### Backend Connection Failed
+### Kết Nối Backend Thất Bại
 
-Ensure the backend is running on `http://localhost:8000`:
+Đảm bảo backend đang chạy trên `http://localhost:8000`:
 ```bash
 curl http://localhost:8000/health
 ```
 
-### OCR Not Working
+### OCR Không Hoạt Động
 
-Check browser console for errors. OCR runs in the browser using WebAssembly.
+Kiểm tra browser console để tìm lỗi. OCR chạy trong trình duyệt sử dụng WebAssembly.
 
 ## Production Build
 
 ```bash
-# Build for production
+# Build cho production
 pnpm build
 
-# Preview production build
+# Xem trước production build
 pnpm preview
 ```
 
-## Environment Setup
+## Thiết Lập Môi Trường
 
-No environment variables required! The frontend proxies to the backend automatically.
+Không cần biến môi trường! Frontend tự động proxy đến backend.
 
-To change the backend URL, edit `vite.config.ts`:
+Để thay đổi URL backend, sửa `vite.config.ts`:
 
 ```typescript
 server: {
   proxy: {
     '/api': {
-      target: 'http://localhost:8000', // Change this if needed
+      target: 'http://localhost:8000', // Thay đổi nếu cần
       ...
     }
   }
 }
 ```
 
-## Next Steps
+## Bước Tiếp Theo
 
-- Read the full [README.md](README.md) for detailed documentation
-- Customize the UI components in `src/components/`
-- Modify the OCR drug detection logic in `src/lib/ocr.ts`
-- Add more UI components from shadcn/ui
+- Đọc [README.md](README.md) đầy đủ để biết tài liệu chi tiết
+- Tùy chỉnh UI components trong `src/components/`
+- Sửa đổi logic phát hiện thuốc OCR trong `src/lib/ocr.ts`
+- Thêm nhiều UI components từ shadcn/ui
 
-## Tech Stack
+## Công Nghệ Sử Dụng
 
-- ⚡ Vite - Lightning fast build tool
+- ⚡ Vite - Build tool siêu nhanh
 - ⚛️ React 18 - UI framework
 - 🎨 Tailwind CSS - Utility-first styling
-- 🧩 shadcn/ui - Beautiful components
-- 🔍 Tesseract.js - OCR in the browser
+- 🧩 shadcn/ui - Components đẹp
+- 🔍 Tesseract.js - OCR trong trình duyệt
 - 📊 TanStack Query - Data fetching
 - 📤 React Dropzone - File uploads
 
-Enjoy building! 🚀
+Chúc bạn phát triển vui vẻ! 🚀

@@ -124,7 +124,7 @@ export function ImageUpload({
                         >
                             <img
                                 src={previews[image.name]}
-                                alt={`Uploaded drug label ${index + 1}`}
+                                alt={`Nhãn thuốc đã tải lên ${index + 1}`}
                                 className="w-full h-auto max-h-64 object-contain"
                             />
                             {!isProcessing && (
@@ -173,8 +173,8 @@ export function ImageUpload({
                                 </div>
                                 <p className="text-sm font-medium">
                                     {isDragActive
-                                        ? "Drop more images here"
-                                        : "Upload from files"}
+                                        ? "Thả thêm hình ảnh vào đây"
+                                        : "Tải lên từ tệp"}
                                 </p>
                             </div>
                         </div>
@@ -190,9 +190,7 @@ export function ImageUpload({
                                 <div className="rounded-full bg-primary/10 p-4">
                                     <Camera className="h-6 w-6 text-primary" />
                                 </div>
-                                <p className="text-sm font-medium">
-                                    Take photo
-                                </p>
+                                <p className="text-sm font-medium">Chụp ảnh</p>
                             </div>
                         </div>
                     </div>
@@ -200,8 +198,7 @@ export function ImageUpload({
 
                 <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">
-                        {selectedImages.length} image
-                        {selectedImages.length !== 1 ? "s" : ""} selected
+                        Đã chọn {selectedImages.length} hình ảnh
                     </span>
                     {selectedImages.length > 0 && (
                         <Button
@@ -210,7 +207,7 @@ export function ImageUpload({
                             onClick={handleClear}
                             disabled={isProcessing}
                         >
-                            Clear All
+                            Xóa Tất Cả
                         </Button>
                     )}
                 </div>
@@ -249,15 +246,15 @@ export function ImageUpload({
                     <div className="space-y-2">
                         <p className="text-lg font-medium">
                             {isDragActive
-                                ? "Drop the images here"
-                                : "Upload drug label images"}
+                                ? "Thả hình ảnh vào đây"
+                                : "Tải lên hình ảnh nhãn thuốc"}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                            Drag and drop images, or click to select
+                            Kéo thả hình ảnh hoặc nhấp để chọn
                         </p>
                         <p className="text-xs text-muted-foreground">
-                            Supports: PNG, JPG, JPEG, GIF, BMP (up to {maxFiles}{" "}
-                            images)
+                            Hỗ trợ: PNG, JPG, JPEG, GIF, BMP (tối đa {maxFiles}{" "}
+                            hình ảnh)
                         </p>
                     </div>
                 </div>
@@ -273,7 +270,7 @@ export function ImageUpload({
                     type="button"
                 >
                     <Camera className="h-4 w-4" />
-                    Take Photo with Camera
+                    Chụp Ảnh Bằng Camera
                 </Button>
             </div>
         </div>

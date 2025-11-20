@@ -17,7 +17,7 @@ export function DrugList({ drugs, onRemoveDrug }: DrugListProps) {
     return (
         <Card>
             <CardHeader>
-                <CardTitle className="text-lg">Detected Drugs</CardTitle>
+                <CardTitle className="text-lg">Thuốc Đã Phát Hiện</CardTitle>
             </CardHeader>
             <CardContent>
                 <div className="flex flex-wrap gap-2">
@@ -40,8 +40,8 @@ export function DrugList({ drugs, onRemoveDrug }: DrugListProps) {
                     ))}
                 </div>
                 <p className="text-xs text-muted-foreground mt-3">
-                    {drugs.length} drug{drugs.length !== 1 ? "s" : ""} detected.
-                    Remove any incorrect ones.
+                    Đã phát hiện {drugs.length} thuốc. Xóa những thuốc không
+                    chính xác.
                 </p>
             </CardContent>
         </Card>

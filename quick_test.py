@@ -1,27 +1,15 @@
+from app.core.agent import agent_manager
 from drug_interaction_graph import DrugInteractionGraph
+import pandas as pd
 
 
 def main():
-    graph = DrugInteractionGraph("drug_interactions.graphml")
+    agent_manager.initialize_agent()
+    agent = agent_manager.get_agent()
 
-    all_interactions = graph.get_all_interactions_for_drug("Temazepam")
-
-    # count same condition from a drug
-    cnt = {}
-    for it in all_interactions:
-        if it["condition"] not in cnt:
-            cnt[it["condition"]] = 1
-        else:
-            cnt[it["condition"]] += 1
-
-    print(cnt)
-
-    # test_interaction = graph.search_interaction("Temazepam", "sildenafil")
-    # print(test_interaction)
-
-    # vs = graph.graph.vs
-    # for v in vs:
-    #     print(v)
+    question = "What are the interactions between Vitamin C, B-Complex, Vitamin D3, Vitamin B6, Vitamin B12, Folate, Magnesium Bisglycinate, Acid ascorbic, Thiamin HCl, Riboflavin, Pyridoxin HCl, Cyanocobalamin, Nicotinamid?"
+    answer = agent.query(question)
+    print(answer)
 
 
 if __name__ == "__main__":

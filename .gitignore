@@ -13,7 +13,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# lib/
 lib64/
 parts/
 sdist/
@@ -42,10 +42,10 @@ Thumbs.db
 .ipynb_checkpoints
 
 # Output files
-*.png
-*.html
-*.graphml
-!drug_network*.png
+# *.png
+# *.html
+# *.graphml
+# !drug_network*.png
 
 # Logs
 *.log

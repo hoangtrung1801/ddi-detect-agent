@@ -14,6 +14,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from .state import DrugInteractionAgentState
 from .tools import DrugInteractionTools
 from .enhanced_tools import EnhancedDrugInteractionTools
+from .models import DrugInteractionResult
 from drug_interaction_graph import DrugInteractionGraph
 
 
@@ -87,6 +88,7 @@ class DrugInteractionGraph:
         workflow.add_node("agent", self._agent_node)
         workflow.add_node("tools", ToolNode(self.tools))
         workflow.add_node("translator", self._translator_node)
+        workflow.add_node("parser", self._parser_node)
 
         # Set entry point
         workflow.set_entry_point("agent")
@@ -104,8 +106,11 @@ class DrugInteractionGraph:
         # Add edge from tools back to agent
         workflow.add_edge("tools", "agent")
 
-        # Add edge from translator to end
-        workflow.add_edge("translator", END)
+        # Add edge from translator to parser
+        workflow.add_edge("translator", "parser")
+
+        # Add edge from parser to end
+        workflow.add_edge("parser", END)
 
         return workflow
 
@@ -238,6 +243,57 @@ Using map_drug_name_tool:
 
         return {"messages": [response]}
 
+    def _extract_drug_conversions_from_messages(self, messages) -> dict:
+        """
+        Extract drug name conversions from tool call messages.
+
+        Looks for patterns like:
+        - "Converted 'original' → 'converted'"
+        - "• Converted 'original' → 'converted'"
+        - "Mapped 'original' to 'converted'"
+        - "LLM Conversion: 'original' → 'converted'"
+
+        Args:
+            messages: List of messages from state
+
+        Returns:
+            Dictionary mapping original drug names to converted names
+        """
+        conversions = {}
+
+        # Look through messages for tool responses containing conversions
+        for msg in messages:
+            if hasattr(msg, "content") and msg.content:
+                content = str(msg.content)
+
+                # Pattern 1: "Converted 'original' → 'converted'" or "• Converted 'original' → 'converted'"
+                pattern1 = r"(?:•\s*)?Converted\s+['\"]([^'\"]+)['\"]\s*→\s*['\"]([^'\"]+)['\"]"
+                matches1 = re.findall(pattern1, content, re.IGNORECASE)
+                for original, converted in matches1:
+                    conversions[original.strip()] = converted.strip()
+
+                # Pattern 2: "Mapped 'original' to 'converted'"
+                pattern2 = r"Mapped\s+['\"]([^'\"]+)['\"]\s+to\s+['\"]([^'\"]+)['\"]"
+                matches2 = re.findall(pattern2, content, re.IGNORECASE)
+                for original, converted in matches2:
+                    conversions[original.strip()] = converted.strip()
+
+                # Pattern 3: "LLM Conversion: 'original' → 'converted'"
+                pattern3 = (
+                    r"LLM\s+Conversion:\s+['\"]([^'\"]+)['\"]\s*→\s*['\"]([^'\"]+)['\"]"
+                )
+                matches3 = re.findall(pattern3, content, re.IGNORECASE)
+                for original, converted in matches3:
+                    conversions[original.strip()] = converted.strip()
+
+                # Pattern 4: "Database Mapping: 'original' → 'converted'"
+                pattern4 = r"Database\s+Mapping:\s+['\"]([^'\"]+)['\"]\s*→\s*['\"]([^'\"]+)['\"]"
+                matches4 = re.findall(pattern4, content, re.IGNORECASE)
+                for original, converted in matches4:
+                    conversions[original.strip()] = converted.strip()
+
+        return conversions
+
     def _extract_drug_links_from_messages(self, messages) -> dict:
         """
         Extract drug links from tool call messages.
@@ -309,6 +365,14 @@ Using map_drug_name_tool:
         if state_links:
             drug_links.update(state_links)
 
+        # Extract drug conversions from tool call messages
+        drug_conversions = self._extract_drug_conversions_from_messages(messages)
+
+        # Also check state (for backward compatibility)
+        state_conversions = state.get("drug_conversions", {})
+        if state_conversions:
+            drug_conversions.update(state_conversions)
+
         # Append drug links section to the content if available
         content_to_translate = last_ai_message.content
         if drug_links:
@@ -350,12 +414,109 @@ Using map_drug_name_tool:
             if self.verbose:
                 print(f"Translation completed: {len(vietnamese_output)} characters")
 
-            return {"vietnamese_output": vietnamese_output}
+            return {
+                "vietnamese_output": vietnamese_output,
+                "drug_conversions": drug_conversions,
+            }
 
         except Exception as e:
             if self.verbose:
                 print(f"Translation error: {e}")
-            return {"vietnamese_output": f"Lỗi dịch thuật: {str(e)}"}
+            return {
+                "vietnamese_output": f"Lỗi dịch thuật: {str(e)}",
+                "drug_conversions": drug_conversions,
+            }
+
+    def _parser_node(self, state: DrugInteractionAgentState) -> dict:
+        """
+        Parser node that parses the Vietnamese output into structured JSON format.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with parsed structured result
+        """
+        vietnamese_output = state.get("vietnamese_output", "")
+        drug_links = state.get("drug_links", {})
+        drug_conversions = state.get("drug_conversions", {})
+
+        if not vietnamese_output:
+            return {"parsed_result": None}
+
+        # Create a prompt for parsing the Vietnamese output into structured format
+        parsing_prompt = f"""
+        Parse the following Vietnamese text about drug interactions into a structured JSON format.
+
+        Extract the following information:
+        1. Drug name conversions (original -> converted) - look for sections like "Drug Name Conversions" or "Chuyển đổi tên thuốc"
+        2. Drug interactions between pairs (drug1, drug2, status, details) - look for sections like "Interactions Between Drug Pairs" or "Tương tác giữa các cặp thuốc"
+        3. Summary (overall_risk, major_interactions, recommendations) - look for sections like "Final Summary" or "Tóm tắt cuối cùng"
+
+        For drug references, use the provided drug_links dictionary to find URLs. Match drug names from the text to keys in drug_links.
+
+        Vietnamese text to parse:
+        {vietnamese_output}
+
+        Drug links available:
+        {drug_links}
+
+        Drug conversions tracked from tool calls (use these as the source of truth):
+        {drug_conversions}
+
+        Instructions:
+        - IMPORTANT: Use the drug_conversions dictionary above as the PRIMARY source for drug conversions. These are the actual conversions that happened during tool execution.
+        - Extract all drug conversions: For each entry in drug_conversions, create a DrugConversion entry with original and converted names. Also extract any additional conversions mentioned in the Vietnamese text.
+        - Extract all drug interaction pairs and their details (look for headings like "Drug1 + Drug2" or "Thuốc1 + Thuốc2")
+        - For each interaction, determine status: "An Toàn" if safe/no interaction, "Có Tương Tác" if interaction found
+        - Extract the summary information:
+          * overall_risk: Look for "Overall Risk" or "Rủi ro tổng thể" (values like "High", "Medium", "Low", "None" or "Cao", "Trung bình", "Thấp", "Không")
+          * major_interactions: List of key interaction findings
+          * recommendations: List of clinical recommendations
+        - Map drug names to their reference links if available in drug_links (case-insensitive matching)
+        - For DrugConversion references, use drug_links to find URLs for the converted drug names
+        - Set step to 1
+        - Set title to a descriptive title about the drug interaction analysis (can be in Vietnamese)
+        - If a section is missing, use empty lists [] or appropriate defaults
+        - Ensure all required fields are present in the output
+        """
+
+        # Use structured output with Pydantic model
+        parser_llm = ChatOpenAI(
+            model=self.model_name,
+            temperature=0.0,  # Low temperature for consistent parsing
+        )
+
+        try:
+            # Use with_structured_output for parsing
+            structured_llm = parser_llm.with_structured_output(DrugInteractionResult)
+
+            # Get parsed result
+            parsed_result = structured_llm.invoke(
+                [
+                    SystemMessage(
+                        content="You are a parser that extracts structured information from Vietnamese drug interaction text. Parse accurately and map all available information to the required structure."
+                    ),
+                    HumanMessage(content=parsing_prompt),
+                ]
+            )
+
+            # Convert Pydantic model to dict for state
+            parsed_dict = (
+                parsed_result.model_dump()
+                if hasattr(parsed_result, "model_dump")
+                else parsed_result
+            )
+
+            if self.verbose:
+                print(f"Parsing completed: {len(str(parsed_dict))} characters")
+
+            return {"parsed_result": parsed_dict}
+
+        except Exception as e:
+            if self.verbose:
+                print(f"Parsing error: {e}")
+            return {"parsed_result": None}
 
     def invoke(self, input_text: str, thread_id: str = "default") -> str:
         """
@@ -375,6 +536,8 @@ Using map_drug_name_tool:
             "output": "",
             "vietnamese_output": "",
             "drug_links": {},
+            "drug_conversions": {},
+            "parsed_result": None,
             "intermediate_steps": [],
         }
 
@@ -420,6 +583,8 @@ Using map_drug_name_tool:
             "output": "",
             "vietnamese_output": "",
             "drug_links": {},
+            "drug_conversions": {},
+            "parsed_result": None,
             "intermediate_steps": [],
         }
 
@@ -451,6 +616,8 @@ Using map_drug_name_tool:
             "output": "",
             "vietnamese_output": "",
             "drug_links": {},
+            "drug_conversions": {},
+            "parsed_result": None,
             "intermediate_steps": [],
         }
 
@@ -464,6 +631,8 @@ Using map_drug_name_tool:
             # Extract the final message and Vietnamese translation
             messages = result.get("messages", [])
             vietnamese_output = result.get("vietnamese_output", "")
+            parsed_result = result.get("parsed_result")
+            drug_conversions = result.get("drug_conversions", {})
 
             # Extract drug links from messages (from tool responses)
             drug_links = self._extract_drug_links_from_messages(messages)
@@ -484,6 +653,8 @@ Using map_drug_name_tool:
                 "english": english_output or "I couldn't generate a response.",
                 "vietnamese": vietnamese_output or "Không thể tạo phản hồi.",
                 "drug_links": drug_links,
+                "drug_conversions": drug_conversions,
+                "parsed_result": parsed_result,
             }
 
         except Exception as e:
@@ -493,6 +664,7 @@ Using map_drug_name_tool:
                 "english": f"Error processing query: {str(e)}",
                 "vietnamese": f"Lỗi xử lý truy vấn: {str(e)}",
                 "drug_links": {},
+                "parsed_result": None,
             }
 
     def get_graph_stats(self) -> dict:

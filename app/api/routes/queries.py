@@ -63,7 +63,12 @@ async def query_drug_interaction(request: QueryRequest):
         answer = agent.query(request.question)
 
         print(f"Answer: {answer}")
-        return QueryResponse(answer=answer, timestamp=datetime.utcnow().isoformat())
+        # return QueryResponse(answer=answer, timestamp=datetime.utcnow().isoformat())
+        return QueryResponse(
+            answer=answer["response"],
+            drug_links=answer["drug_links"],
+            parsed_result=answer["parsed_result"],
+        )
 
     except Exception as e:
         raise HTTPException(

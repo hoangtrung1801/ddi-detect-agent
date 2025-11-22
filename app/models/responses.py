@@ -8,7 +8,8 @@ class QueryResponse(BaseModel):
     """Response model for query."""
 
     answer: str = Field(..., description="Agent's response to the query")
-    timestamp: str = Field(..., description="ISO timestamp of the response")
+    drug_links: dict = Field(..., description="Drug links from drugs.com")
+    parsed_result: dict = Field(..., description="Parsed result from the query")
 
 
 class ChatResponse(BaseModel):

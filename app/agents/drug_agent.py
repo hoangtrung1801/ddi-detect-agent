@@ -94,7 +94,7 @@ class DrugInteractionAgent:
             enable_drug_mapping=enable_drug_mapping,
         )
 
-    def query(self, question: str, include_links: bool = False) -> Union[str, dict]:
+    def query(self, question: str) -> Union[str, dict]:
         """
         Ask a question about drug interactions.
 
@@ -107,22 +107,23 @@ class DrugInteractionAgent:
         """
         try:
             print(f"Question: {question}")
-            if include_links:
-                result = self.agent_graph.invoke_with_translation(
-                    question, thread_id=self.thread_id
-                )
-                return {
-                    "response": result.get("vietnamese", result.get("english", "")),
-                    "drug_links": result.get("drug_links", {}),
-                }
-            else:
-                response = self.agent_graph.invoke(question, thread_id=self.thread_id)
-                return response
+            result = self.agent_graph.invoke_with_translation(
+                question, thread_id=self.thread_id
+            )
+            return {
+                "response": result.get("vietnamese", result.get("english", "")),
+                "drug_links": result.get("drug_links", {}),
+                "drug_conversions": result.get("drug_conversions", {}),
+                "parsed_result": result.get("parsed_result"),
+            }
         except Exception as e:
             error_msg = f"Error processing query: {str(e)}"
-            if include_links:
-                return {"response": error_msg, "drug_links": {}}
-            return error_msg
+            return {
+                "response": error_msg,
+                "drug_links": {},
+                "drug_conversions": {},
+                "parsed_result": None,
+            }
 
     def stream_query(self, question: str):
         """

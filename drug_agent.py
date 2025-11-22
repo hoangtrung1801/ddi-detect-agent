@@ -161,16 +161,16 @@ class DrugInteractionAgent:
                     "Returns the interaction condition/effect if found."
                 ),
             ),
-            Tool(
-                name="GetAllDrugInteractions",
-                func=get_all_interactions,
-                description=(
-                    "Use this tool to get ALL interactions for a SINGLE drug. "
-                    "Input should be one drug name only. "
-                    "Example inputs: 'Warfarin', 'Aspirin', 'Metformin'. "
-                    "Returns a list of all drugs that interact with the specified drug and their conditions."
-                ),
-            ),
+            # Tool(
+            #     name="GetAllDrugInteractions",
+            #     func=get_all_interactions,
+            #     description=(
+            #         "Use this tool to get ALL interactions for a SINGLE drug. "
+            #         "Input should be one drug name only. "
+            #         "Example inputs: 'Warfarin', 'Aspirin', 'Metformin'. "
+            #         "Returns a list of all drugs that interact with the specified drug and their conditions."
+            #     ),
+            # ),
         ]
 
         return tools
@@ -186,6 +186,7 @@ class DrugInteractionAgent:
             Agent's response as a string
         """
         try:
+            print(f"Question: {question}")
             response = self.agent.invoke({"input": question})
             return response.get("output", "I couldn't generate a response.")
         except Exception as e:

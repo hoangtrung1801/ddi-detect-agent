@@ -23,7 +23,7 @@ def test_imports():
 
         print("  ✓ Tools module imported successfully")
 
-        from app.agents.state import AgentState  # noqa: F401
+        from app.agents.state import DrugInteractionAgentState  # noqa: F401
 
         print("  ✓ State module imported successfully")
 
@@ -132,12 +132,12 @@ def test_state_definition():
     print("\n✓ Testing state definition...")
 
     try:
-        from app.agents.state import AgentState
+        from app.agents.state import DrugInteractionAgentState
 
         # Check that state has required fields
         required_fields = ["messages", "input", "output", "intermediate_steps"]
 
-        annotations = AgentState.__annotations__
+        annotations = DrugInteractionAgentState.__annotations__
         for field in required_fields:
             if field in annotations:
                 print(f"  ✓ State has field '{field}'")

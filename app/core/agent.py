@@ -5,6 +5,10 @@ import uuid
 from typing import Dict, Optional
 
 from app.agents import create_agent, DrugInteractionAgent
+from app.agents.medical_specialist_agent import (
+    MedicalSpecialistAgent,
+    create_medical_specialist_agent,
+)
 from app.core.config import settings
 
 
@@ -15,6 +19,8 @@ class AgentManager:
         """Initialize the agent manager."""
         self.agent: Optional[DrugInteractionAgent] = None
         self.sessions: Dict[str, DrugInteractionAgent] = {}
+        self.query_answers: Dict[str, str] = {}  # Store query answers per session
+        self.medical_specialist: Optional[MedicalSpecialistAgent] = None
 
     def initialize_agent(self) -> None:
         """Initialize the main agent."""
@@ -83,15 +89,62 @@ class AgentManager:
         Returns:
             True if session was found and cleared, False otherwise
         """
+        found = False
         if session_id in self.sessions:
             self.sessions[session_id].clear_memory()
             del self.sessions[session_id]
-            return True
-        return False
+            found = True
+        if session_id in self.query_answers:
+            del self.query_answers[session_id]
+            found = True
+        return found
+
+    def save_query_answer(self, session_id: str, answer: str) -> None:
+        """
+        Save a query answer for a session.
+
+        Args:
+            session_id: Session ID
+            answer: The answer to save
+        """
+        self.query_answers[session_id] = answer
+
+    def get_query_answer(self, session_id: str) -> Optional[str]:
+        """
+        Get saved query answer for a session.
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            Saved answer or None if not found
+        """
+        return self.query_answers.get(session_id)
 
     def get_active_sessions_count(self) -> int:
         """Get the count of active sessions."""
         return len(self.sessions)
+
+    def get_medical_specialist_agent(self) -> MedicalSpecialistAgent:
+        """
+        Get or create the medical specialist agent.
+
+        Returns:
+            MedicalSpecialistAgent instance
+        """
+        if self.medical_specialist is None:
+            # Use gpt-4o-search-preview for medical specialist (built-in search capabilities)
+            # Can be configured via environment variable if needed
+            medical_model = os.getenv(
+                "MEDICAL_SPECIALIST_MODEL", "gpt-4o-search-preview"
+            )
+            self.medical_specialist = create_medical_specialist_agent(
+                model_name=medical_model,
+                temperature=0.3,  # Balanced for medical accuracy
+                verbose=settings.AGENT_VERBOSE,
+                openai_api_key=settings.OPENAI_API_KEY,
+            )
+        return self.medical_specialist
 
     def cleanup(self) -> None:
         """Cleanup all sessions."""

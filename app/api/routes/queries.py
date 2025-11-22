@@ -47,6 +47,7 @@ async def query_drug_interaction(request: QueryRequest):
     """
     Simple query endpoint without session management.
     Each query is independent with no conversation history.
+    Saves the answer to session 'hackathon' for later use in chat.
     """
     try:
         agent = agent_manager.get_agent()
@@ -63,6 +64,12 @@ async def query_drug_interaction(request: QueryRequest):
         answer = agent.query(request.question)
 
         print(f"Answer: {answer}")
+
+        # Save answer to session 'hackathon' for later use in chat
+        session_id = "hackathon"
+        answer_text = answer["response"]
+        agent_manager.save_query_answer(session_id, answer_text)
+
         # return QueryResponse(answer=answer, timestamp=datetime.utcnow().isoformat())
         return QueryResponse(
             answer=answer["response"],
@@ -92,6 +99,8 @@ async def chat_with_session(request: ChatRequest):
     """
     Chat endpoint with session management.
     Maintains conversation history across requests using session_id.
+    Uses saved query answers as context when available.
+    Uses a medical specialist agent with RAG database to answer questions.
     """
     try:
         agent_manager.get_agent()
@@ -101,13 +110,22 @@ async def chat_with_session(request: ChatRequest):
         )
 
     try:
-        # Get or create session
-        session_id, session_agent = agent_manager.get_or_create_session(
-            request.session_id
-        )
+        # Use fixed session ID 'hackathon'
+        session_id = "hackathon"
 
-        # Process query with session agent
-        answer = session_agent.query(request.question)
+        # Get medical specialist agent (with RAG database)
+        medical_specialist = agent_manager.get_medical_specialist_agent()
+
+        # Get saved query answer as context
+        saved_answer = agent_manager.get_query_answer(session_id)
+
+        # Process query with medical specialist agent
+        # The agent will use RAG to retrieve relevant medical knowledge
+        # and use saved_answer as additional context
+        answer = medical_specialist.query(
+            question=request.question,
+            context=saved_answer,  # Pass saved answer as context
+        )
 
         return ChatResponse(
             answer=answer,

@@ -7,7 +7,7 @@ Includes drug name mapping capabilities for better drug name recognition.
 
 import os
 import logging
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple, Union
 from drug_interaction_graph import DrugInteractionGraph
 from .graph import DrugInteractionGraph as DrugAgentGraph
 
@@ -94,22 +94,35 @@ class DrugInteractionAgent:
             enable_drug_mapping=enable_drug_mapping,
         )
 
-    def query(self, question: str) -> str:
+    def query(self, question: str, include_links: bool = False) -> Union[str, dict]:
         """
         Ask a question about drug interactions.
 
         Args:
             question: Natural language question about drug interactions
+            include_links: If True, returns dict with response and drug_links
 
         Returns:
-            Agent's response as a string
+            Agent's response as a string, or dict with 'response' and 'drug_links' if include_links=True
         """
         try:
             print(f"Question: {question}")
-            response = self.agent_graph.invoke(question, thread_id=self.thread_id)
-            return response
+            if include_links:
+                result = self.agent_graph.invoke_with_translation(
+                    question, thread_id=self.thread_id
+                )
+                return {
+                    "response": result.get("vietnamese", result.get("english", "")),
+                    "drug_links": result.get("drug_links", {}),
+                }
+            else:
+                response = self.agent_graph.invoke(question, thread_id=self.thread_id)
+                return response
         except Exception as e:
-            return f"Error processing query: {str(e)}"
+            error_msg = f"Error processing query: {str(e)}"
+            if include_links:
+                return {"response": error_msg, "drug_links": {}}
+            return error_msg
 
     def stream_query(self, question: str):
         """

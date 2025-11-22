@@ -4,6 +4,7 @@ LangGraph workflow definition for Drug Interaction Agent.
 Defines the graph structure and node functions for the agent.
 """
 
+import re
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
@@ -145,10 +146,11 @@ The system automatically converts drug names to their active ingredients using A
 - Generic names are standardized to match the database
 - All conversions happen automatically when you use search_drug_interaction
 
-**Your Task:**
-1. **Optional**: Use map_drug_name_tool for each drug if you want to explicitly show the conversion process to the user
-2. **Required**: Use search_drug_interaction to check ALL unique pairs of drugs
-3. **Required**: After checking all pairs, provide a comprehensive summary
+**Your Task (IMPORTANT - Follow This Order):**
+1. **REQUIRED FIRST STEP**: Use find_drug_detail_links tool with the user's original query to find drug information links from drugs.com for all drugs mentioned
+2. **Optional**: Use map_drug_name_tool for each drug if you want to explicitly show the conversion process to the user
+3. **Required**: Use search_drug_interaction to check ALL unique pairs of drugs
+4. **Required**: After checking all pairs, provide a comprehensive summary
 
 **Checking Interactions:**
 - For each unique pair (e.g., Drug A + Drug B, Drug A + Drug C, Drug B + Drug C):
@@ -236,6 +238,47 @@ Using map_drug_name_tool:
 
         return {"messages": [response]}
 
+    def _extract_drug_links_from_messages(self, messages) -> dict:
+        """
+        Extract drug links from tool call messages.
+
+        Args:
+            messages: List of messages from state
+
+        Returns:
+            Dictionary mapping drug names to URLs
+        """
+        drug_links = {}
+
+        # Look through messages for tool responses containing drug links
+        for i, msg in enumerate(messages):
+            # Check if this is a tool response message
+            if hasattr(msg, "content") and msg.content:
+                content = str(msg.content)
+
+                # Check if this contains drugs.com links
+                if "drugs.com" in content.lower():
+                    # Pattern: "- DrugName: https://www.drugs.com/..."
+                    # Also handle: "DrugName: https://..."
+                    link_patterns = [
+                        r"-?\s*([^:\n]+?):\s*(https?://[^\s\)]+drugs\.com[^\s\)\n]*)",
+                        r"\[([^\]]+)\]\((https?://[^\)]+drugs\.com[^\)]*)\)",
+                    ]
+
+                    for pattern in link_patterns:
+                        matches = re.findall(
+                            pattern, content, re.IGNORECASE | re.MULTILINE
+                        )
+                        for match in matches:
+                            if len(match) == 2:
+                                drug_name, url = match
+                                drug_name = drug_name.strip()
+                                url = re.sub(r"[.,;:!?\)]+$", "", url.strip())
+                                if drug_name and url and "drugs.com" in url.lower():
+                                    drug_links[drug_name] = url
+
+        return drug_links
+
     def _translator_node(self, state: DrugInteractionAgentState) -> dict:
         """
         Translation node that translates the agent's output to Vietnamese.
@@ -258,14 +301,31 @@ Using map_drug_name_tool:
         if not last_ai_message:
             return {"vietnamese_output": "Không thể dịch phản hồi."}
 
+        # Extract drug links from tool call messages
+        drug_links = self._extract_drug_links_from_messages(messages)
+
+        # Also check state (for backward compatibility)
+        state_links = state.get("drug_links", {})
+        if state_links:
+            drug_links.update(state_links)
+
+        # Append drug links section to the content if available
+        content_to_translate = last_ai_message.content
+        if drug_links:
+            links_section = "\n\n### Drug Information Links\n"
+            for drug_name, url in drug_links.items():
+                links_section += f"- [{drug_name}]({url})\n"
+            content_to_translate += links_section
+
         # Create translation prompt
         translation_prompt = f"""
         Translate the following medical text about drug interactions from English to Vietnamese.
         Keep the markdown formatting intact and ensure medical terminology is accurately translated.
         Maintain the structure with headings, lists, and emphasis.
+        Keep URLs unchanged.
 
         Text to translate:
-        {last_ai_message.content}
+        {content_to_translate}
         """
 
         # Use a separate LLM instance for translation
@@ -314,6 +374,7 @@ Using map_drug_name_tool:
             "input": input_text,
             "output": "",
             "vietnamese_output": "",
+            "drug_links": {},
             "intermediate_steps": [],
         }
 
@@ -358,6 +419,7 @@ Using map_drug_name_tool:
             "input": input_text,
             "output": "",
             "vietnamese_output": "",
+            "drug_links": {},
             "intermediate_steps": [],
         }
 
@@ -388,6 +450,7 @@ Using map_drug_name_tool:
             "input": input_text,
             "output": "",
             "vietnamese_output": "",
+            "drug_links": {},
             "intermediate_steps": [],
         }
 
@@ -402,6 +465,13 @@ Using map_drug_name_tool:
             messages = result.get("messages", [])
             vietnamese_output = result.get("vietnamese_output", "")
 
+            # Extract drug links from messages (from tool responses)
+            drug_links = self._extract_drug_links_from_messages(messages)
+            # Also check state for backward compatibility
+            state_links = result.get("drug_links", {})
+            if state_links:
+                drug_links.update(state_links)
+
             english_output = ""
             if messages:
                 # Get the last AI message
@@ -413,6 +483,7 @@ Using map_drug_name_tool:
             return {
                 "english": english_output or "I couldn't generate a response.",
                 "vietnamese": vietnamese_output or "Không thể tạo phản hồi.",
+                "drug_links": drug_links,
             }
 
         except Exception as e:
@@ -421,6 +492,7 @@ Using map_drug_name_tool:
             return {
                 "english": f"Error processing query: {str(e)}",
                 "vietnamese": f"Lỗi xử lý truy vấn: {str(e)}",
+                "drug_links": {},
             }
 
     def get_graph_stats(self) -> dict:

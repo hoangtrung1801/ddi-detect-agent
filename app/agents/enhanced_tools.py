@@ -4,12 +4,15 @@ Enhanced Drug Interaction Tools with Drug Mapping for LangGraph Agent.
 Extends the basic drug interaction tools with drug name mapping capabilities.
 """
 
+import re
+import os
 from typing import List
 import importlib.util
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
+from openai import OpenAI
 from drug_interaction_graph import DrugInteractionGraph
 
 # Check if drug mapping is available
@@ -143,6 +146,71 @@ Respond with high confidence if you're certain, medium if somewhat certain, low 
             print(f"Error in drug mapping: {e}")
             return drug_name
 
+    @staticmethod
+    def _extract_drug_names_from_query(query: str) -> List[str]:
+        """
+        Extract drug names from a user query.
+
+        Args:
+            query: User's query text
+
+        Returns:
+            List of extracted drug names
+        """
+        # Common separators for drug combinations
+        separators = r"\b(?:and|with|,|&|\+)\b"
+
+        # Split by separators and clean up
+        potential_drugs = re.split(separators, query, flags=re.IGNORECASE)
+        potential_drugs = [drug.strip() for drug in potential_drugs if drug.strip()]
+
+        # Also look for capitalized words (likely drug names)
+        capitalized_words = re.findall(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b", query)
+
+        # Filter out common non-drug words
+        common_words = {
+            "Interaction",
+            "Details",
+            "Summary",
+            "Risk",
+            "Clinical",
+            "Recommendations",
+            "Overall",
+            "Key",
+            "Final",
+            "Between",
+            "Drug",
+            "Name",
+            "Conversions",
+            "Pairs",
+            "Example",
+            "Check",
+            "What",
+            "Show",
+            "Tell",
+            "Find",
+            "Search",
+            "Information",
+            "About",
+            "Between",
+            "Together",
+            "Safe",
+        }
+
+        drug_names = set()
+
+        # Add drugs from split
+        for drug in potential_drugs:
+            if len(drug) > 2 and drug.lower() not in [w.lower() for w in common_words]:
+                drug_names.add(drug.strip())
+
+        # Add capitalized words
+        for word in capitalized_words:
+            if word not in common_words and len(word) > 2:
+                drug_names.add(word.strip())
+
+        return list(drug_names)
+
     def create_tools(self) -> List:
         """
         Create enhanced LangChain tools for the agent.
@@ -151,6 +219,95 @@ Respond with high confidence if you're certain, medium if somewhat certain, low 
             List of tool functions decorated with @tool
         """
         graph = self.graph
+
+        # Initialize OpenAI client for web search
+        openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+        @tool
+        def find_drug_detail_links(query: str) -> str:
+            """
+            Find detailed drug information links from drugs.com for all drugs mentioned in the query.
+
+            This tool should be called FIRST before checking drug interactions.
+            It extracts drug names from the user's query and searches for their
+            official information pages on drugs.com.
+
+            Args:
+                query: The user's query containing drug names. Examples: "Warfarin and Aspirin",
+                       "Check interactions between Tylenol, Advil, and Coumadin"
+
+            Returns:
+                Formatted string with drug names and their drugs.com links
+            """
+            # Extract drug names from query
+            drug_names = EnhancedDrugInteractionTools._extract_drug_names_from_query(
+                query
+            )
+
+            if not drug_names:
+                return "No drug names found in the query. Please provide drug names in your query."
+
+            # Limit to 5 drugs to avoid too many API calls
+            drug_names = drug_names[:5]
+
+            results = []
+            drug_links_dict = {}
+
+            for drug_name in drug_names:
+                try:
+                    # Use OpenAI client with web search to find drug link
+                    completion = openai_client.chat.completions.create(
+                        model="gpt-4o-search-preview",
+                        web_search_options={},
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": f"Find me drug detail link of drug '{drug_name}' on drugs.com. Return only the URL.",
+                            }
+                        ],
+                    )
+
+                    response_text = completion.choices[0].message.content
+
+                    # Extract URL from response
+                    url_patterns = [
+                        r"https?://(?:www\.)?drugs\.com/[^\s\)]+",
+                        r"https?://[^\s]*drugs\.com[^\s\)]*",
+                    ]
+
+                    url_found = False
+                    for pattern in url_patterns:
+                        url_match = re.search(pattern, response_text, re.IGNORECASE)
+                        if url_match:
+                            url = url_match.group(0)
+                            # Clean up URL
+                            url = re.sub(r"[.,;:!?\)]+$", "", url)
+                            if "drugs.com" in url.lower():
+                                drug_links_dict[drug_name] = url
+                                results.append(f"- {drug_name}: {url}")
+                                url_found = True
+                                break
+
+                    if not url_found:
+                        # Fallback: construct URL manually
+                        drug_slug = re.sub(r"[^a-z0-9\s-]", "", drug_name.lower())
+                        drug_slug = re.sub(r"\s+", "-", drug_slug.strip())
+                        fallback_url = f"https://www.drugs.com/{drug_slug}.html"
+                        drug_links_dict[drug_name] = fallback_url
+                        results.append(f"- {drug_name}: {fallback_url} (estimated)")
+
+                except Exception:
+                    # Fallback on error
+                    drug_slug = re.sub(r"[^a-z0-9\s-]", "", drug_name.lower())
+                    drug_slug = re.sub(r"\s+", "-", drug_slug.strip())
+                    fallback_url = f"https://www.drugs.com/{drug_slug}.html"
+                    drug_links_dict[drug_name] = fallback_url
+                    results.append(f"- {drug_name}: {fallback_url} (estimated)")
+
+            if results:
+                return "Drug Information Links (drugs.com):\n" + "\n".join(results)
+            else:
+                return "Could not find drug links."
 
         @tool
         def search_drug_interaction(query: str) -> str:
@@ -374,8 +531,9 @@ Respond with high confidence if you're certain, medium if somewhat certain, low 
             except Exception as e:
                 return f"Error getting suggestions for '{drug_name}': {str(e)}"
 
-        # Create base tools
+        # Create base tools - find_drug_detail_links should be first
         base_tools = [
+            find_drug_detail_links,
             search_drug_interaction,
             # get_all_drug_interactions,
             # get_drug_statistics,

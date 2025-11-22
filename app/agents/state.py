@@ -28,6 +28,9 @@ class DrugInteractionAgentState(TypedDict):
     # Translated output in Vietnamese
     vietnamese_output: str
 
+    # Drug links from drugs.com
+    drug_links: dict
+
     # Intermediate steps (for debugging/logging)
     intermediate_steps: list
 

@@ -62,3 +62,26 @@ class DrugNamesFromImageRequest(BaseModel):
             ]
         }
     }
+
+
+class AddDrugRequest(BaseModel):
+    """Request model for adding a drug to medicine cabinet."""
+
+    drug_name: str = Field(
+        ...,
+        description="Name of the drug or active ingredient to add",
+        min_length=1,
+    )
+    user_id: Optional[str] = Field(
+        default="admin",
+        description="User identifier (defaults to 'admin' for mock)",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {"drug_name": "Aspirin", "user_id": "admin"},
+                {"drug_name": "Warfarin"},
+            ]
+        }
+    }

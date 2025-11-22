@@ -50,3 +50,59 @@ class DrugNamesFromImageResponse(BaseModel):
 
     result: list[str] = Field(..., description="List of drug names")
     timestamp: str = Field(..., description="ISO timestamp of the response")
+
+
+class DrugInteractionInfo(BaseModel):
+    """Model for drug interaction information."""
+
+    drug1: str = Field(..., description="First drug name")
+    drug2: str = Field(..., description="Second drug name")
+    interaction: Optional[str] = Field(None, description="Interaction details")
+    has_interaction: bool = Field(..., description="Whether interaction exists")
+    severity: Optional[str] = Field(None, description="Severity level if available")
+    checked_at: str = Field(..., description="ISO timestamp when checked")
+
+
+class AddDrugResponse(BaseModel):
+    """Response model for adding a drug."""
+
+    success: bool = Field(..., description="Whether drug was added successfully")
+    message: str = Field(..., description="Status message")
+    drug_name: str = Field(..., description="Name of the drug added")
+    user_id: str = Field(..., description="User identifier")
+    checking_interactions: bool = Field(
+        ..., description="Whether interaction check is running in background"
+    )
+    timestamp: str = Field(..., description="ISO timestamp")
+
+
+class DrugWithInteractions(BaseModel):
+    """Model for drug with its interactions."""
+
+    drug_name: str = Field(..., description="Drug name")
+    interactions: Optional[str] = Field(
+        None, description="Joined string of all interactions (if multiple, joined)"
+    )
+
+
+class MedicineCabinetListResponse(BaseModel):
+    """Response model for listing medicine cabinet."""
+
+    user_id: str = Field(..., description="User identifier")
+    drugs: List[DrugWithInteractions] = Field(
+        ..., description="List of drugs with their interactions"
+    )
+    count: int = Field(..., description="Number of drugs in cabinet")
+    timestamp: str = Field(..., description="ISO timestamp")
+
+
+class DrugInteractionsResponse(BaseModel):
+    """Response model for drug interactions check."""
+
+    drug_name: str = Field(..., description="Drug name checked")
+    user_id: str = Field(..., description="User identifier")
+    interactions: List[DrugInteractionInfo] = Field(
+        ..., description="List of interactions found"
+    )
+    total_interactions: int = Field(..., description="Total number of interactions")
+    timestamp: str = Field(..., description="ISO timestamp")

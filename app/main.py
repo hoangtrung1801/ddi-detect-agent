@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.agent import agent_manager
-from app.api.routes import health, stats, queries
+from app.api.routes import health, stats, queries, medicine_cabinet
 
 
 @asynccontextmanager
@@ -43,6 +43,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(stats.router)
 app.include_router(queries.router)
+app.include_router(medicine_cabinet.router, prefix="/medicine-cabinet", tags=["Medicine Cabinet"])
 
 
 if __name__ == "__main__":

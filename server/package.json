@@ -1,0 +1,45 @@
+{
+  "name": "ddi-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "dev": "node --watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "data:build": "node scripts/build-data.ts",
+    "eval": "node scripts/eval.ts",
+    "snapshot:python": "node scripts/snapshot-python.ts",
+    "spike:agent": "node scripts/spike-agent.ts",
+    "spike:parity": "node scripts/spike-parity.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "1.3.0",
+    "@earendil-works/pi-ai": "1.3.0",
+    "@hono/node-server": "2.1.5",
+    "@huggingface/transformers": "4.3.1",
+    "better-sqlite3": "13.0.3",
+    "hono": "4.13.13",
+    "openai": "7.39.0",
+    "pino": "10.4.0",
+    "typebox": "1.3.27"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "26.6.5",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "sharp",
+      "onnxruntime-node",
+      "esbuild"
+    ]
+  }
+}

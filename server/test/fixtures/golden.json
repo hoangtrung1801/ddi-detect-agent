@@ -1,0 +1,650 @@
+[
+ {
+  "id": "warfarin-aspirin",
+  "input": {
+   "text": "What are the interactions between Warfarin and Aspirin?"
+  },
+  "expect": {
+   "resolved": {
+    "Warfarin": "Warfarin",
+    "Aspirin": "Acetylsalicylic acid"
+   },
+   "pairs": [
+    {
+     "a": "Warfarin",
+     "b": "Acetylsalicylic acid",
+     "status": "interaction"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "tylenol-coumadin",
+  "input": {
+   "text": "Tôi dùng Tylenol và Coumadin cùng lúc có được không?"
+  },
+  "expect": {
+   "resolved": {
+    "Tylenol": "Acetaminophen",
+    "Coumadin": "Warfarin"
+   },
+   "pairs": [
+    {
+     "a": "Acetaminophen",
+     "b": "Warfarin",
+     "status": "interaction"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "advil-aspirin",
+  "input": {
+   "drugs": [
+    "Advil",
+    "Aspirin"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Advil": "Ibuprofen",
+    "Aspirin": "Acetylsalicylic acid"
+   },
+   "pairs": [
+    {
+     "a": "Ibuprofen",
+     "b": "Acetylsalicylic acid",
+     "status": "interaction"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "misspelled",
+  "input": {
+   "drugs": [
+    "ibuprofin",
+    "warfarine"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "ibuprofin": "Ibuprofen",
+    "warfarine": "Warfarin"
+   },
+   "pairs": [
+    {
+     "a": "Ibuprofen",
+     "b": "Warfarin",
+     "status": "interaction"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "one-unknown",
+  "input": {
+   "drugs": [
+    "Warfarin",
+    "Zorblaxinol"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Warfarin": "Warfarin",
+    "Zorblaxinol": null
+   },
+   "pairs": [],
+   "unresolved_pairs": 1
+  }
+ },
+ {
+  "id": "three-drugs",
+  "input": {
+   "drugs": [
+    "Metformin",
+    "Omeprazole",
+    "Lisinopril"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Metformin": "Metformin",
+    "Omeprazole": "Omeprazole",
+    "Lisinopril": "Lisinopril"
+   },
+   "pairs": [
+    {
+     "a": "Metformin",
+     "b": "Omeprazole",
+     "status": "no_record"
+    },
+    {
+     "a": "Metformin",
+     "b": "Lisinopril",
+     "status": "no_record"
+    },
+    {
+     "a": "Omeprazole",
+     "b": "Lisinopril",
+     "status": "no_record"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "four-drugs",
+  "input": {
+   "drugs": [
+    "Warfarin",
+    "Ibuprofen",
+    "Omeprazole",
+    "Digoxin"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Warfarin": "Warfarin",
+    "Ibuprofen": "Ibuprofen",
+    "Omeprazole": "Omeprazole",
+    "Digoxin": "Digoxin"
+   },
+   "pairs": [
+    {
+     "a": "Warfarin",
+     "b": "Ibuprofen",
+     "status": "interaction"
+    },
+    {
+     "a": "Warfarin",
+     "b": "Omeprazole",
+     "status": "interaction"
+    },
+    {
+     "a": "Warfarin",
+     "b": "Digoxin",
+     "status": "no_record"
+    },
+    {
+     "a": "Ibuprofen",
+     "b": "Omeprazole",
+     "status": "interaction"
+    },
+    {
+     "a": "Ibuprofen",
+     "b": "Digoxin",
+     "status": "interaction"
+    },
+    {
+     "a": "Omeprazole",
+     "b": "Digoxin",
+     "status": "no_record"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "five-drugs",
+  "input": {
+   "drugs": [
+    "Atorvastatin",
+    "Clopidogrel",
+    "Omeprazole",
+    "Amlodipine",
+    "Metformin"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Atorvastatin": "Atorvastatin",
+    "Clopidogrel": "Clopidogrel",
+    "Omeprazole": "Omeprazole",
+    "Amlodipine": "Amlodipine",
+    "Metformin": "Metformin"
+   },
+   "pairs": [
+    {
+     "a": "Atorvastatin",
+     "b": "Clopidogrel",
+     "status": "no_record"
+    },
+    {
+     "a": "Atorvastatin",
+     "b": "Omeprazole",
+     "status": "interaction"
+    },
+    {
+     "a": "Atorvastatin",
+     "b": "Amlodipine",
+     "status": "interaction"
+    },
+    {
+     "a": "Atorvastatin",
+     "b": "Metformin",
+     "status": "no_record"
+    },
+    {
+     "a": "Clopidogrel",
+     "b": "Omeprazole",
+     "status": "interaction"
+    },
+    {
+     "a": "Clopidogrel",
+     "b": "Amlodipine",
+     "status": "interaction"
+    },
+    {
+     "a": "Clopidogrel",
+     "b": "Metformin",
+     "status": "no_record"
+    },
+    {
+     "a": "Omeprazole",
+     "b": "Amlodipine",
+     "status": "no_record"
+    },
+    {
+     "a": "Omeprazole",
+     "b": "Metformin",
+     "status": "no_record"
+    },
+    {
+     "a": "Amlodipine",
+     "b": "Metformin",
+     "status": "no_record"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "vi-paracetamol-warfarin",
+  "input": {
+   "text": "Tôi đang uống paracetamol và warfarin, có sao không?"
+  },
+  "expect": {
+   "resolved": {
+    "paracetamol": "Acetaminophen",
+    "warfarin": "Warfarin"
+   },
+   "pairs": [
+    {
+     "a": "Acetaminophen",
+     "b": "Warfarin",
+     "status": "interaction"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "vi-ibuprofen-aspirin",
+  "input": {
+   "text": "thuốc ibuprofen với aspirin có uống cùng được không"
+  },
+  "expect": {
+   "resolved": {
+    "ibuprofen": "Ibuprofen",
+    "aspirin": "Acetylsalicylic acid"
+   },
+   "pairs": [
+    {
+     "a": "Ibuprofen",
+     "b": "Acetylsalicylic acid",
+     "status": "interaction"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "vitamin-c-warfarin",
+  "input": {
+   "drugs": [
+    "Vitamin C",
+    "Warfarin"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Vitamin C": "Ascorbic acid",
+    "Warfarin": "Warfarin"
+   },
+   "pairs": [
+    {
+     "a": "Ascorbic acid",
+     "b": "Warfarin",
+     "status": "no_record"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "vitamin-e-aspirin",
+  "input": {
+   "drugs": [
+    "Vitamin E",
+    "Aspirin"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Vitamin E": "Vitamin E",
+    "Aspirin": "Acetylsalicylic acid"
+   },
+   "pairs": [
+    {
+     "a": "Vitamin E",
+     "b": "Acetylsalicylic acid",
+     "status": "interaction"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "caffeine-cipro",
+  "input": {
+   "drugs": [
+    "Caffeine",
+    "Ciprofloxacin"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Caffeine": "Caffeine",
+    "Ciprofloxacin": "Ciprofloxacin"
+   },
+   "pairs": [
+    {
+     "a": "Caffeine",
+     "b": "Ciprofloxacin",
+     "status": "no_record"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "alcohol-metformin",
+  "input": {
+   "drugs": [
+    "Alcohol",
+    "Metformin"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Alcohol": "Ethanol",
+    "Metformin": "Metformin"
+   },
+   "pairs": [
+    {
+     "a": "Ethanol",
+     "b": "Metformin",
+     "status": "interaction"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "lipitor-plavix",
+  "input": {
+   "drugs": [
+    "Lipitor",
+    "Plavix"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Lipitor": "Atorvastatin",
+    "Plavix": "Clopidogrel"
+   },
+   "pairs": [
+    {
+     "a": "Atorvastatin",
+     "b": "Clopidogrel",
+     "status": "no_record"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "nexium-zocor",
+  "input": {
+   "drugs": [
+    "Nexium",
+    "Zocor"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Nexium": "Esomeprazole",
+    "Zocor": "Simvastatin"
+   },
+   "pairs": [
+    {
+     "a": "Esomeprazole",
+     "b": "Simvastatin",
+     "status": "no_record"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "viagra-tramadol",
+  "input": {
+   "drugs": [
+    "Viagra",
+    "Tramadol"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Viagra": "Sildenafil",
+    "Tramadol": "Tramadol"
+   },
+   "pairs": [
+    {
+     "a": "Sildenafil",
+     "b": "Tramadol",
+     "status": "interaction"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "panadol-ventolin",
+  "input": {
+   "drugs": [
+    "Panadol",
+    "Ventolin"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Panadol": "Acetaminophen",
+    "Ventolin": "Salbutamol"
+   },
+   "pairs": [
+    {
+     "a": "Acetaminophen",
+     "b": "Salbutamol",
+     "status": "no_record"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "zyrtec-claritin",
+  "input": {
+   "drugs": [
+    "Zyrtec",
+    "Claritin"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Zyrtec": "Cetirizine",
+    "Claritin": "Loratadine"
+   },
+   "pairs": [
+    {
+     "a": "Cetirizine",
+     "b": "Loratadine",
+     "status": "interaction"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "prozac-ultram",
+  "input": {
+   "drugs": [
+    "Prozac",
+    "Ultram"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Prozac": "Fluoxetine",
+    "Ultram": "Tramadol"
+   },
+   "pairs": [
+    {
+     "a": "Fluoxetine",
+     "b": "Tramadol",
+     "status": "interaction"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "both-unknown",
+  "input": {
+   "drugs": [
+    "Foobarazole",
+    "Quuxinib"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Foobarazole": null,
+    "Quuxinib": null
+   },
+   "pairs": [],
+   "unresolved_pairs": 1
+  }
+ },
+ {
+  "id": "digoxin-furosemide",
+  "input": {
+   "drugs": [
+    "Digoxin",
+    "Furosemide"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Digoxin": "Digoxin",
+    "Furosemide": "Furosemide"
+   },
+   "pairs": [
+    {
+     "a": "Digoxin",
+     "b": "Furosemide",
+     "status": "interaction"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "cipro-diclofenac",
+  "input": {
+   "drugs": [
+    "Ciprofloxacin",
+    "Diclofenac"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Ciprofloxacin": "Ciprofloxacin",
+    "Diclofenac": "Diclofenac"
+   },
+   "pairs": [
+    {
+     "a": "Ciprofloxacin",
+     "b": "Diclofenac",
+     "status": "no_record"
+    }
+   ],
+   "unresolved_pairs": 0
+  }
+ },
+ {
+  "id": "st-johns-wort",
+  "input": {
+   "drugs": [
+    "St John's wort",
+    "Sertraline"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "St John's wort": null,
+    "Sertraline": "Sertraline"
+   },
+   "pairs": [],
+   "unresolved_pairs": 1
+  }
+ },
+ {
+  "id": "insulin-metformin",
+  "input": {
+   "drugs": [
+    "Insulin",
+    "Metformin"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Insulin": null,
+    "Metformin": "Metformin"
+   },
+   "pairs": [],
+   "unresolved_pairs": 1
+  }
+ },
+ {
+  "id": "fish-oil-warfarin",
+  "input": {
+   "drugs": [
+    "Fish oil",
+    "Warfarin"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Fish oil": null,
+    "Warfarin": "Warfarin"
+   },
+   "pairs": [],
+   "unresolved_pairs": 1
+  }
+ }
+]

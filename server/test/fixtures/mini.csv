@@ -1,0 +1,10 @@
+drug_1,drug_2,condition
+Warfarin,Acetylsalicylic acid,Warfarin may increase the anticoagulant activities of Acetylsalicylic acid.
+Acetaminophen,Warfarin,"Acetaminophen may increase the anticoagulant activities of Warfarin, leading to bleeding."
+Ibuprofen,Warfarin,Ibuprofen may increase the anticoagulant activities of Warfarin.
+Warfarin,Ibuprofen,The risk or severity of bleeding can be increased when Warfarin is combined with Ibuprofen.
+Ibuprofen,Acetylsalicylic acid,The risk or severity of gastrointestinal bleeding can be increased when Ibuprofen is combined with Acetylsalicylic acid.
+Omeprazole,Digoxin,Omeprazole may increase the serum concentration of Digoxin.
+Metformin,Cetirizine,Metformin may decrease the excretion rate of Cetirizine.
+Loratadine,Omeprazole,Omeprazole may decrease the metabolism of Loratadine.
+Ethanol,Metformin,The risk or severity of lactic acidosis can be increased when Ethanol is combined with Metformin.

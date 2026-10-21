@@ -1,393 +1,105 @@
-import { useState, useCallback } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { Pill, Loader2 } from "lucide-react";
-import { ImageUpload } from "./components/ImageUpload";
-import {
-    MultiImageResults,
-    type ImageResult,
-} from "./components/MultiImageResults";
-import { DrugList } from "./components/DrugList";
-import { InteractionResults } from "./components/InteractionResults";
-import { Button } from "./components/ui/button";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "./components/ui/card";
-import { drugInteractionAPI } from "./lib/api";
-import "./App.css";
+import { useState } from "react";
+import { InteractionCheckPage } from "@/components/InteractionCheckPage";
+import { PatientProfile } from "@/components/PatientProfile";
+import { LoginDialog } from "@/components/LoginDialog";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import useAuthStore from "@/stores/use-auth-store";
+
+type Page = "interaction" | "cabinet";
+
+const NAV: { id: Page; label: string }[] = [
+  { id: "interaction", label: "Kiểm tra tương tác" },
+  { id: "cabinet", label: "Tủ thuốc" },
+];
+
+function Logo() {
+  return (
+    <span className="flex size-[34px] items-center justify-center rounded-[9px] bg-primary">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-foreground" aria-hidden="true">
+        <path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z" />
+        <path d="m8.5 8.5 7 7" />
+      </svg>
+    </span>
+  );
+}
 
 function App() {
-    const [selectedImages, setSelectedImages] = useState<File[]>([]);
-    const [imageResults, setImageResults] = useState<ImageResult[]>([]);
-    const [detectedDrugs, setDetectedDrugs] = useState<string[]>([]);
-    const [interactionResult, setInteractionResult] = useState<string>("");
-    const [isProcessingImages, setIsProcessingImages] = useState(false);
+  const [page, setPage] = useState<Page>("interaction");
+  // Drugs handed from the cabinet to the check page; the run counter remounts the page for a fresh check.
+  const [prefill, setPrefill] = useState<{ drugs: string[]; run: number } | null>(null);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const { user, isAuthenticated } = useAuthStore();
 
-    // Drug name extraction mutation
-    const drugExtractionMutation = useMutation({
-        mutationFn: async (file: File) => {
-            const result = await drugInteractionAPI.extractDrugNamesFromImage(
-                file
-            );
-            return result;
-        },
-        onError: (error) => {
-            console.error("Drug extraction error:", error);
-        },
-    });
+  const checkDrugs = (drugs: string[]) => {
+    setPrefill((p) => ({ drugs, run: (p?.run ?? 0) + 1 }));
+    setPage("interaction");
+    window.scrollTo({ top: 0 });
+  };
 
-    // Drug interaction query mutation
-    const interactionMutation = useMutation({
-        mutationFn: async (drugs: string[]) => {
-            const question =
-                drugs.length === 1
-                    ? `Show me all interactions for ${drugs[0]}`
-                    : `What are the interactions between ${drugs.join(", ")}?`;
-
-            const response = await drugInteractionAPI.query(question);
-            return response;
-        },
-        onSuccess: (data) => {
-            setInteractionResult(data.answer);
-        },
-        onError: (error) => {
-            console.error("API Error:", error);
-            alert(
-                "Không thể kiểm tra tương tác. Vui lòng đảm bảo backend đang chạy."
-            );
-        },
-    });
-
-    // Process multiple images
-    const processImages = useCallback(
-        async (files: File[]) => {
-            setIsProcessingImages(true);
-            // Don't clear existing results - append new ones
-            setInteractionResult("");
-
-            const newResults: ImageResult[] = files.map((file) => ({
-                file,
-                preview: URL.createObjectURL(file),
-                extractedIngredients: [],
-                isLoading: true,
-            }));
-
-            setImageResults((prev) => [...prev, ...newResults]);
-
-            // Process each image
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                try {
-                    // const result =
-                    //     await drugInteractionAPI.extractDrugNamesFromImage(file);
-                    const result = await drugExtractionMutation.mutateAsync(
-                        file
-                    );
-
-                    setImageResults((prev) =>
-                        prev.map((imgResult) =>
-                            imgResult.file.name === file.name
-                                ? {
-                                      ...imgResult,
-                                      extractedIngredients: result.result,
-                                      isLoading: false,
-                                  }
-                                : imgResult
-                        )
-                    );
-
-                    // Add to detected drugs list
-                    setDetectedDrugs((prev) => {
-                        const newDrugs = result.result.filter(
-                            (drug) => !prev.includes(drug)
-                        );
-                        return [...prev, ...newDrugs];
-                    });
-                } catch (error) {
-                    console.error(`Error processing ${file.name}:`, error);
-                    setImageResults((prev) =>
-                        prev.map((imgResult) =>
-                            imgResult.file.name === file.name
-                                ? {
-                                      ...imgResult,
-                                      isLoading: false,
-                                      error: "Không thể trích xuất thành phần",
-                                  }
-                                : imgResult
-                        )
-                    );
-                }
-            }
-
-            setIsProcessingImages(false);
-        },
-        [drugExtractionMutation]
-    );
-
-    const handleImageSelect = (files: File[]) => {
-        setSelectedImages(files);
-        // Don't process immediately - wait for user to click OK button
-    };
-
-    const handleStartExtraction = () => {
-        if (selectedImages.length > 0) {
-            // Only process images that haven't been processed yet
-            const processedFileNames = imageResults.map(
-                (result) => result.file.name
-            );
-            const unprocessedImages = selectedImages.filter(
-                (img) => !processedFileNames.includes(img.name)
-            );
-
-            if (unprocessedImages.length > 0) {
-                processImages(unprocessedImages);
-            }
-        }
-    };
-
-    const handleClearImages = () => {
-        setSelectedImages([]);
-        setImageResults([]);
-        setDetectedDrugs([]);
-        setInteractionResult("");
-    };
-
-    const handleRemoveImage = (fileName: string) => {
-        const newImages = selectedImages.filter((img) => img.name !== fileName);
-        setSelectedImages(newImages);
-
-        setImageResults((prev) => {
-            const newResults = prev.filter(
-                (result) => result.file.name !== fileName
-            );
-            return newResults;
-        });
-
-        // Update detected drugs list
-        const removedResult = imageResults.find(
-            (result) => result.file.name === fileName
-        );
-        if (removedResult) {
-            setDetectedDrugs((prev) =>
-                prev.filter(
-                    (drug) => !removedResult.extractedIngredients.includes(drug)
-                )
-            );
-        }
-    };
-
-    const handleRetryImage = (fileName: string) => {
-        const file = selectedImages.find((img) => img.name === fileName);
-        if (file) {
-            processImages([file]);
-        }
-    };
-
-    const handleRemoveDrug = (drug: string) => {
-        setDetectedDrugs((prev) => prev.filter((d) => d !== drug));
-        setInteractionResult("");
-    };
-
-    const handleCheckInteractions = () => {
-        if (detectedDrugs.length === 0) {
-            alert("Vui lòng tải lên hình ảnh có tên thuốc trước.");
-            return;
-        }
-        interactionMutation.mutate(detectedDrugs);
-    };
-
-    const isProcessing = isProcessingImages;
-    const isCheckingInteractions = interactionMutation.isPending;
-
-    return (
-        <div className="min-h-screen bg-linear-to-br from-blue-50 via-white to-purple-50">
-            <div className="container mx-auto px-4 py-8 max-w-4xl">
-                {/* Header */}
-                <div className="text-center mb-8">
-                    <div className="flex items-center justify-center gap-3 mb-4">
-                        <div className="rounded-full bg-primary/10 p-3">
-                            <Pill className="h-8 w-8 text-primary" />
-                        </div>
-                        <h1 className="text-4xl font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                            Kiểm Tra Tương Tác Thuốc
-                        </h1>
-                    </div>
-                    <p className="text-muted-foreground text-lg">
-                        Tải lên hình ảnh nhãn thuốc để trích xuất thành phần
-                        hoạt chất và kiểm tra các tương tác thuốc tiềm ẩn
-                    </p>
-                </div>
-
-                {/* Main Content */}
-                <div className="space-y-6">
-                    {/* Upload Section */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Bước 1: Tải Lên Hình Ảnh</CardTitle>
-                            <CardDescription>
-                                Tải lên hình ảnh nhãn thuốc để trích xuất thành
-                                phần hoạt chất
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <ImageUpload
-                                onImageSelect={handleImageSelect}
-                                onClear={handleClearImages}
-                                selectedImages={selectedImages}
-                                isProcessing={isProcessing}
-                                maxFiles={5}
-                            />
-
-                            {/* OK Button to Start Extraction */}
-                            {selectedImages.length > imageResults.length &&
-                                !isProcessingImages && (
-                                    <div className="mt-4">
-                                        <Button
-                                            variant="default"
-                                            onClick={handleStartExtraction}
-                                            disabled={isProcessing}
-                                            className="w-full"
-                                            size="lg"
-                                        >
-                                            {imageResults.length === 0
-                                                ? "OK - Trích Xuất Tên Thuốc"
-                                                : `Trích xuất ${
-                                                      selectedImages.length -
-                                                      imageResults.length
-                                                  } hình ảnh nữa`}
-                                        </Button>
-                                    </div>
-                                )}
-
-                            {/* Processing Progress */}
-                            {isProcessingImages && (
-                                <div className="mt-4 space-y-2">
-                                    <div className="flex items-center justify-between text-sm">
-                                        <span className="text-muted-foreground">
-                                            Đang xử lý hình ảnh...
-                                        </span>
-                                        <span className="font-medium">
-                                            {
-                                                imageResults.filter(
-                                                    (r) => !r.isLoading
-                                                ).length
-                                            }{" "}
-                                            trong {selectedImages.length} đã
-                                            hoàn thành
-                                        </span>
-                                    </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-2">
-                                        <div
-                                            className="bg-primary h-2 rounded-full transition-all duration-300"
-                                            style={{
-                                                width: `${
-                                                    selectedImages.length > 0
-                                                        ? (imageResults.filter(
-                                                              (r) =>
-                                                                  !r.isLoading
-                                                          ).length /
-                                                              selectedImages.length) *
-                                                          100
-                                                        : 0
-                                                }%`,
-                                            }}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* Image Results */}
-                    {imageResults.length > 0 && (
-                        <MultiImageResults
-                            results={imageResults}
-                            onRemoveImage={handleRemoveImage}
-                            onRetryImage={handleRetryImage}
-                        />
-                    )}
-
-                    {/* Detected Drugs */}
-                    {detectedDrugs.length > 0 && (
-                        <>
-                            <DrugList
-                                drugs={detectedDrugs}
-                                onRemoveDrug={handleRemoveDrug}
-                                onAddDrug={(drug) =>
-                                    setDetectedDrugs([...detectedDrugs, drug])
-                                }
-                            />
-
-                            {/* Check Interactions Button */}
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>
-                                        Bước 2: Kiểm Tra Tương Tác
-                                    </CardTitle>
-                                    <CardDescription>
-                                        Phân tích các thuốc đã phát hiện để tìm
-                                        các tương tác tiềm ẩn
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <Button
-                                        variant="default"
-                                        onClick={handleCheckInteractions}
-                                        disabled={
-                                            detectedDrugs.length === 0 ||
-                                            isCheckingInteractions
-                                        }
-                                        className="w-full"
-                                        size="lg"
-                                    >
-                                        {isCheckingInteractions ? (
-                                            <>
-                                                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                                                Đang Kiểm Tra Tương Tác...
-                                            </>
-                                        ) : (
-                                            `Kiểm Tra Tương Tác cho ${detectedDrugs.length} Thuốc`
-                                        )}
-                                    </Button>
-                                </CardContent>
-                            </Card>
-                        </>
-                    )}
-
-                    {/* Results */}
-                    <InteractionResults
-                        result={interactionResult}
-                        isLoading={isCheckingInteractions}
-                    />
-
-                    {/* Info Footer */}
-                    <Card className="bg-blue-50 border-blue-200">
-                        <CardContent className="pt-6">
-                            <div className="flex gap-3">
-                                <div className="text-blue-600 mt-1">ℹ️</div>
-                                <div className="text-sm text-blue-900">
-                                    <p className="font-medium mb-1">
-                                        Thông Báo Quan Trọng
-                                    </p>
-                                    <p className="text-blue-800">
-                                        Công cụ này chỉ mang tính chất tham
-                                        khảo. Luôn tham khảo ý kiến của chuyên
-                                        gia y tế trước khi thay đổi bất kỳ chế
-                                        độ dùng thuốc nào. Đây không phải là
-                                        thay thế cho lời khuyên y tế chuyên
-                                        nghiệp.
-                                    </p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
+  return (
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="border-b bg-card print:hidden">
+        <div className="mx-auto flex w-full max-w-[1280px] flex-wrap items-center gap-x-8 gap-y-3 px-4 py-3 sm:px-6">
+          <button type="button" onClick={() => setPage("interaction")} className="flex items-center gap-2.5">
+            <Logo />
+            <span className="text-lg font-bold tracking-tight">DDISafe</span>
+          </button>
+          <nav aria-label="Điều hướng chính" className="flex flex-1 flex-wrap gap-1">
+            {NAV.map((n) => (
+              <button
+                key={n.id}
+                type="button"
+                aria-current={page === n.id ? "page" : undefined}
+                onClick={() => setPage(n.id)}
+                className={cn(
+                  "min-h-11 rounded-lg px-3.5 text-[15px] transition-colors",
+                  page === n.id ? "bg-brand-soft font-semibold text-brand-ink" : "font-medium text-neutral-ink hover:bg-muted",
+                )}
+              >
+                {n.label}
+              </button>
+            ))}
+          </nav>
+          {isAuthenticated && user ? (
+            <button type="button" onClick={() => setPage("cabinet")} className="flex min-h-11 items-center gap-2.5">
+              <span className="flex size-9 items-center justify-center rounded-full bg-brand-soft font-bold text-brand-ink">
+                {(user.name || user.email).charAt(0).toUpperCase()}
+              </span>
+              <span className="max-w-40 truncate font-semibold">{user.name || user.email}</span>
+            </button>
+          ) : (
+            <Button variant="outline" className="h-11 px-4 font-semibold" onClick={() => setIsLoginOpen(true)}>
+              Đăng nhập
+            </Button>
+          )}
         </div>
-    );
+      </header>
+
+      <main className="flex-1">
+        {page === "interaction" ? (
+          <InteractionCheckPage key={prefill?.run ?? 0} initialDrugs={prefill?.drugs} onRequireLogin={() => setIsLoginOpen(true)} />
+        ) : (
+          <PatientProfile onCheckDrugs={checkDrugs} onRequireLogin={() => setIsLoginOpen(true)} />
+        )}
+      </main>
+
+      <footer className="border-t bg-card print:hidden">
+        <div className="mx-auto flex w-full max-w-[1280px] flex-wrap justify-between gap-2 px-4 py-4 text-sm text-muted-foreground sm:px-6">
+          <span>DDISafe — phát hiện tương tác thuốc bằng AI</span>
+          <a
+            href="https://github.com/hoangtrung1801/ddi-detect-agent"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-primary hover:underline"
+          >
+            GitHub
+          </a>
+        </div>
+      </footer>
+      <LoginDialog open={isLoginOpen} onOpenChange={setIsLoginOpen} />
+    </div>
+  );
 }
 
 export default App;

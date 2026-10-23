@@ -316,7 +316,7 @@ export function InteractionGraphPage({ initialDrugs, onCheckDrugs }: Interaction
                   <span className="text-xs font-semibold text-muted-foreground uppercase">{effectOf(selectedLink.condition).label}</span>
                 </div>
                 <h2 className="mt-1 text-lg font-bold">
-                  {endId(selectedLink.source)} → {endId(selectedLink.target)}
+                  {endId(selectedLink.source)} + {endId(selectedLink.target)}
                 </h2>
                 <p className="mt-1 text-[15px]">{selectedLink.condition}</p>
               </>

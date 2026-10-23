@@ -27,6 +27,7 @@ export function PairDetail({ pair, index, total, links, onPrev, onNext, onFixDru
   const meta = KIND_META[pair.kind];
   const pendingInteraction = pair.pending && pair.status === "interaction";
   const ingredientPairs = pair.ingredientPairs ?? [];
+  const details = [...new Map((pair.sourceRecords ?? []).flatMap((r) => (r.details ?? []).map((d) => [d.pageId, d] as const))).values()];
   // Links are keyed by database name: the drugs themselves, or the interacting ingredients of a product.
   const sources = [...new Set([pair.a, pair.b, ...ingredientPairs.flatMap((i) => [i.a, i.b])])]
     .filter((d) => links[d])
@@ -88,6 +89,44 @@ export function PairDetail({ pair, index, total, links, onPrev, onNext, onFixDru
         </div>
       )}
 
+      {pair.severitySource && !pair.pending && (
+        <p className="text-xs text-muted-foreground">
+          {pair.severitySource === "DDInter 2.0" ? "Mức độ từ DDInter 2.0. Diễn giải và khuyến nghị bên dưới do AI tổng hợp." : "Mức độ do AI ước lượng."}
+        </p>
+      )}
+      {pair.sourceRecords?.length && !pair.pending ? (
+        <ul className="text-xs text-muted-foreground">
+          {pair.sourceRecords.map((r) => (
+            <li key={`${r.drugAId}|${r.drugBId}|${r.level}`}>
+              <a href={r.url} target="_blank" rel="noopener noreferrer" className="underline">
+                {r.source}: {r.drugAId} + {r.drugBId} · {r.level}
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {!pair.pending && details.map((d) => (
+        <section key={d.pageId} className="flex max-w-[72ch] flex-col gap-2 rounded-lg border bg-card p-3 text-sm">
+          <a href={d.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary underline">
+            Dữ liệu gốc DDInter #{d.pageId} · {d.drugAName} + {d.drugBName}
+          </a>
+          <p className="text-xs text-muted-foreground">
+            Mức độ trên trang: {d.level} · Thu thập: {new Date(d.retrievedAt).toLocaleDateString("vi-VN")}
+          </p>
+          {pair.sourceRecords?.some((r) => r.details?.some((detail) => detail.pageId === d.pageId) && r.level !== d.level) && (
+            <p className="font-semibold">Mức độ trên trang khác dữ liệu CSV. Cần dược sĩ kiểm tra; hệ thống giữ nguyên mức độ đã nhập.</p>
+          )}
+          <p><span className="font-semibold">Phân loại cơ chế: </span>{d.mechanisms.join(", ") || "Nguồn chưa cung cấp"}</p>
+          <p><span className="font-semibold">Mô tả tương tác: </span><span lang="en">{d.description ?? "Nguồn chưa cung cấp"}</span></p>
+          <p><span className="font-semibold">Hướng dẫn xử trí từ nguồn (không phải chỉ định cá nhân): </span><span lang="en">{d.management ?? "Nguồn chưa cung cấp"}</span></p>
+          {d.references.length > 0 ? (
+            <details>
+              <summary className="cursor-pointer font-semibold">Tài liệu tham khảo ({d.references.length})</summary>
+              <ul className="mt-2 flex flex-col gap-1 text-xs" lang="en">{d.references.map((reference, i) => <li key={i}>{reference}</li>)}</ul>
+            </details>
+          ) : <p className="text-xs text-muted-foreground">Nguồn chưa cung cấp tài liệu tham khảo.</p>}
+        </section>
+      ))}
       {rest && !pair.pending && <p className="max-w-[72ch] leading-relaxed">{rest}</p>}
       {pair.status === "no_record" && (
         <p className="max-w-[72ch] text-sm font-semibold text-neutral-ink">
@@ -111,9 +150,9 @@ export function PairDetail({ pair, index, total, links, onPrev, onNext, onFixDru
           </ul>
         </div>
       )}
-      {pair.dbCondition && ingredientPairs.length === 0 && (
+      {pair.dbCondition && ingredientPairs.length === 0 && details.length === 0 && (
         <p className="max-w-[72ch] text-xs text-muted-foreground">
-          <span className="font-semibold">Mô tả gốc trong cơ sở dữ liệu:</span> <span lang="en">{pair.dbCondition}</span>
+          <span className="font-semibold">{pair.sourceRecords?.length ? "Tóm tắt mức độ từ dữ liệu DDInter (không có mô tả cơ chế):" : "Mô tả gốc trong cơ sở dữ liệu:"}</span> <span lang="en">{pair.dbCondition}</span>
         </p>
       )}
 

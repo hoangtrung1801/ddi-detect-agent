@@ -108,6 +108,8 @@ export function useInteractionCheck() {
         kind: pairKind(p),
         explanation: p.explanation,
         dbCondition: p.db_condition,
+        severitySource: p.severity_source,
+        sourceRecords: p.source_records,
         ingredientPairs: p.ingredient_pairs,
         pending: false,
       }));
@@ -117,8 +119,11 @@ export function useInteractionCheck() {
       a: p.a,
       b: p.b,
       status: p.status,
-      kind: pairKind(p),
+      kind: pairKind({ ...p, severity: p.sourceSeverity }),
       dbCondition: p.condition,
+      severity: p.sourceSeverity,
+      severitySource: p.sourceRecords?.length ? "DDInter 2.0" : undefined,
+      sourceRecords: p.sourceRecords,
       pending: true,
     }));
   }, [state.report, state.livePairs]);

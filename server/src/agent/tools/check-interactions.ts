@@ -14,9 +14,12 @@ const Params = Type.Object({
 export function formatPair(p: PairResult): string {
   const note = p.checked === undefined ? '' : ` [${p.checked} ingredient pairs checked${p.unmatched?.length ? `; no database match for: ${p.unmatched.join(', ')}` : ''}]`;
   if (p.status === 'interaction') {
+    const evidence = (p.sourceRecords ?? []).flatMap((r) => (r.details ?? []).map((d) =>
+      `\nSOURCE ${d.url} [${d.drugAName} + ${d.drugBName}; page risk=${d.level}; CSV risk=${r.level}; retrieved=${d.retrievedAt}]\nMechanism categories: ${d.mechanisms.join(', ') || 'not provided'}\nManagement (source quote): ${d.management ?? 'not provided'}\nReferences: ${d.references.join(' | ') || 'not provided'}`
+    )).join('\n');
     return p.ingredientPairs
-      ? `INTERACTION  ${p.a} + ${p.b}${note}:\n${p.ingredientPairs.map((i) => `  - ${i.a} + ${i.b}: ${i.condition}`).join('\n')}`
-      : `INTERACTION  ${p.a} + ${p.b}: ${p.condition}`;
+      ? `INTERACTION  ${p.a} + ${p.b}${note}:\n${p.ingredientPairs.map((i) => `  - ${i.a} + ${i.b}: ${i.condition}`).join('\n')}${evidence}`
+      : `INTERACTION  ${p.a} + ${p.b}: ${p.condition}${evidence}`;
   }
   if (p.status === 'no_record') return `NO_RECORD  ${p.a} + ${p.b}${note}: no interaction is recorded in the database (this does not prove it is safe)`;
   return `UNRESOLVED  ${p.a} + ${p.b}${note}: at least one drug could not be matched to the database, so this pair was not checked`;

@@ -1,0 +1,82 @@
+{
+  "source": "DDInter 2.0",
+  "homepage": "https://ddinter2.scbdd.com/",
+  "downloadPage": "https://ddinter2.scbdd.com/download/",
+  "terms": "https://ddinter2.scbdd.com/terms/",
+  "license": "CC-BY-NC-SA-4.0",
+  "websiteUpdated": "2024-05-14",
+  "attribution": "DDInter 2.0, curated by the DDInter team. https://ddinter2.scbdd.com/",
+  "limitations": "Official category exports only; not the entire advertised database. Mechanisms, management guidance and references are not supplied in these CSV exports. Unknown is not a minor interaction. No record does not imply safety.",
+  "sourceRows": 222383,
+  "duplicateRows": 62148,
+  "records": 160235,
+  "drugs": 1939,
+  "levels": {
+    "Major": 26914,
+    "Moderate": 96675,
+    "Minor": 6833,
+    "Unknown": 29813
+  },
+  "files": [
+    {
+      "name": "ddinter_downloads_code_A.csv",
+      "url": "https://ddinter2.scbdd.com/static/media/download/ddinter_downloads_code_A.csv",
+      "bytes": 3343434,
+      "sha256": "a22ca451d2b755ca2331886f7e00540c86f555f9f55704a59a19c691251f52e0",
+      "retrievedAt": "2026-10-23T09:20:16.922Z"
+    },
+    {
+      "name": "ddinter_downloads_code_B.csv",
+      "url": "https://ddinter2.scbdd.com/static/media/download/ddinter_downloads_code_B.csv",
+      "bytes": 867726,
+      "sha256": "76de5115a55587f0e822e1096b684fd3ddde058fbefcbb19896df58820ace130",
+      "retrievedAt": "2026-10-23T09:20:01.759Z"
+    },
+    {
+      "name": "ddinter_downloads_code_D.csv",
+      "url": "https://ddinter2.scbdd.com/static/media/download/ddinter_downloads_code_D.csv",
+      "bytes": 1520704,
+      "sha256": "c0627ec39965dbe27829e4934cd20d71eb079f4e373287678737bba9423a306a",
+      "retrievedAt": "2026-10-23T09:19:56.245Z"
+    },
+    {
+      "name": "ddinter_downloads_code_H.csv",
+      "url": "https://ddinter2.scbdd.com/static/media/download/ddinter_downloads_code_H.csv",
+      "bytes": 705088,
+      "sha256": "f0f925f0ba1ee68c4668d3e7a6732719b34623b22a0f5d017f9090e59f63c88e",
+      "retrievedAt": "2026-10-23T09:19:53.350Z"
+    },
+    {
+      "name": "ddinter_downloads_code_L.csv",
+      "url": "https://ddinter2.scbdd.com/static/media/download/ddinter_downloads_code_L.csv",
+      "bytes": 3885702,
+      "sha256": "f54f4486cc00344f8c86508c31c2ca3fad6d1d37ec3af5bcf609b4bbda5507ef",
+      "retrievedAt": "2026-10-23T09:20:22.828Z"
+    },
+    {
+      "name": "ddinter_downloads_code_P.csv",
+      "url": "https://ddinter2.scbdd.com/static/media/download/ddinter_downloads_code_P.csv",
+      "bytes": 317460,
+      "sha256": "83f8c0edb20d09ef29b8500b48f9623e208379525688ade9e70a7df2d8749d55",
+      "retrievedAt": "2026-10-23T09:19:50.833Z"
+    },
+    {
+      "name": "ddinter_downloads_code_R.csv",
+      "url": "https://ddinter2.scbdd.com/static/media/download/ddinter_downloads_code_R.csv",
+      "bytes": 1793766,
+      "sha256": "1c39c3d4a6e41659b7a988538d7f363867592abc6f41a815de8746f6e2150574",
+      "retrievedAt": "2026-10-23T09:19:57.789Z"
+    },
+    {
+      "name": "ddinter_downloads_code_V.csv",
+      "url": "https://ddinter2.scbdd.com/static/media/download/ddinter_downloads_code_V.csv",
+      "bytes": 700777,
+      "sha256": "353973fb300453946aea95733e8fb52338e4b59426d2ce6ca318363d4f84f10a",
+      "retrievedAt": "2026-10-23T09:19:52.270Z"
+    }
+  ],
+  "processed": {
+    "file": "db_drug_interactions.csv",
+    "sha256": "3069fa8823e847ba6973cc9676421109ec5df77746da4ffe943fab5319307472"
+  }
+}

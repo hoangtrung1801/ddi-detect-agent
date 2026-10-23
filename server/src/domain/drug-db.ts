@@ -1,5 +1,8 @@
 import type { Database } from 'better-sqlite3';
 import { normName } from '../util/norm.ts';
+import type { SourceInteractionRecord } from './ddinter.ts';
+import type { Severity } from './risk.ts';
+import type { InteractionDetail } from './ddinter-details.ts';
 
 export interface Drug {
   id: number;
@@ -9,8 +12,10 @@ export interface Drug {
 
 export interface PairRecord {
   condition: string;
-  /** Name of the drug the interaction sentence names first (the text is directional). */
+  /** Original first endpoint; DDInter CSV endpoint order does not establish clinical direction. */
   firstNamed: string;
+  sourceRecords?: SourceInteractionRecord[];
+  sourceSeverity?: Severity;
 }
 
 /** Read access to the interaction database. */
@@ -20,6 +25,7 @@ export class DrugDb {
   readonly #byId = new Map<number, Drug>();
   readonly #pairStmt;
   readonly #countStmt;
+  readonly #detailStmt;
   /** Neighbour ids per drug id, built on first graph query. */
   #adj: Map<number, number[]> | null = null;
 
@@ -34,8 +40,9 @@ export class DrugDb {
       this.#byNorm.set(d.nameNorm, d);
       this.#byId.set(d.id, d);
     }
-    this.#pairStmt = db.prepare('SELECT src_a, condition FROM interactions WHERE a = ? AND b = ?');
+    this.#pairStmt = db.prepare('SELECT src_a, condition, source_records, source_severity FROM interactions WHERE a = ? AND b = ?');
     this.#countStmt = db.prepare('SELECT COUNT(*) AS n FROM interactions');
+    this.#detailStmt = db.prepare('SELECT detail_json FROM interaction_details WHERE a=? AND b=? ORDER BY page_id');
   }
 
   /** Accepts any spelling of the name; normalises it. */
@@ -51,9 +58,23 @@ export class DrugDb {
     if (a.id === b.id) return null;
     const lo = Math.min(a.id, b.id);
     const hi = Math.max(a.id, b.id);
-    const row = this.#pairStmt.get(lo, hi) as { src_a: number; condition: string } | undefined;
+    const row = this.#pairStmt.get(lo, hi) as { src_a: number; condition: string; source_records: string; source_severity: Severity | null } | undefined;
     if (!row) return null;
-    return { condition: row.condition, firstNamed: this.#byId.get(row.src_a)?.name ?? a.name };
+    const records = JSON.parse(row.source_records) as SourceInteractionRecord[];
+    const details = (this.#detailStmt.all(lo, hi) as { detail_json: string }[]).map((r) => JSON.parse(r.detail_json) as InteractionDetail);
+    for (const record of records) {
+      const matched = details.filter((d) => [d.drugAId, d.drugBId].sort().join('|') === [record.drugAId, record.drugBId].sort().join('|'));
+      if (matched.length) {
+        record.details = matched;
+        record.url = matched[0]!.url;
+      }
+    }
+    const descriptions = [...new Set(details.map((d) => d.description).filter((d): d is string => d !== null))];
+    return {
+      condition: descriptions.length ? descriptions.join('\n\n') : row.condition, firstNamed: this.#byId.get(row.src_a)!.name,
+      ...(records.length ? { sourceRecords: records } : {}),
+      ...(row.source_severity ? { sourceSeverity: row.source_severity } : {}),
+    };
   }
 
   /** Number of drugs each drug interacts with. */

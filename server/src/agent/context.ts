@@ -1,4 +1,4 @@
-import type { DrugDb } from '../domain/drug-db.ts';
+import type { DrugDb, PairRecord } from '../domain/drug-db.ts';
 import type { LinkInfo } from '../domain/links.ts';
 import { ingredientVariants, type ResolvedDrug, type Resolver } from '../domain/resolver.ts';
 import type { PairStatus } from '../domain/risk.ts';
@@ -17,6 +17,8 @@ export interface IngredientPair {
   b: string;
   condition: string;
   firstNamed: string;
+  sourceRecords?: PairRecord['sourceRecords'];
+  sourceSeverity?: PairRecord['sourceSeverity'];
 }
 
 export interface PairResult {
@@ -25,6 +27,8 @@ export interface PairResult {
   status: PairStatus;
   condition?: string | undefined;
   firstNamed?: string | undefined;
+  sourceRecords?: PairRecord['sourceRecords'];
+  sourceSeverity?: PairRecord['sourceSeverity'];
   /** Product pairs only: the ingredient pairs behind an `interaction`. */
   ingredientPairs?: IngredientPair[] | undefined;
   /** Product pairs only: how many ingredient pairs could be looked up, and which ingredients had no database match. */
@@ -167,7 +171,7 @@ export function computePairs(ctx: RunContext): PairResult[] {
       const rec = ctx.deps.drugDb.lookupPair(dx, dy);
       out.push(
         rec
-          ? { a, b, status: 'interaction', condition: rec.condition, firstNamed: rec.firstNamed }
+          ? { a, b, status: 'interaction', ...rec }
           : { a, b, status: 'no_record' },
       );
     }
@@ -198,7 +202,7 @@ function computeProductPairs(ctx: RunContext): PairResult[] {
           if (!x.dbName || !y.dbName || normName(x.dbName) === normName(y.dbName)) continue;
           checked++;
           const rec = ctx.deps.drugDb.lookupPair(ctx.deps.drugDb.getDrug(x.dbName)!, ctx.deps.drugDb.getDrug(y.dbName)!);
-          if (rec) found.push({ a: x.dbName, b: y.dbName, condition: rec.condition, firstNamed: rec.firstNamed });
+          if (rec) found.push({ a: x.dbName, b: y.dbName, ...rec });
         }
       }
       const plain = !pa.ingredients.length && !pb.ingredients.length;
@@ -212,6 +216,13 @@ function computeProductPairs(ctx: RunContext): PairResult[] {
           status: 'interaction',
           condition: plain ? found[0]!.condition : found.map((f) => `${f.a} + ${f.b}: ${f.condition}`).join('\n'),
           firstNamed: found[0]!.firstNamed,
+          ...(found.some((f) => f.sourceRecords?.length) ? {
+            sourceRecords: found.flatMap((f) => f.sourceRecords ?? []),
+            sourceSeverity: found.some((f) => f.sourceSeverity === 'major') ? 'major'
+              : found.some((f) => f.sourceRecords?.some((r) => r.level === 'Unknown')) ? undefined
+              : found.some((f) => f.sourceSeverity === 'moderate') ? 'moderate'
+              : found.some((f) => f.sourceSeverity === 'minor') ? 'minor' : undefined,
+          } : {}),
           ...(plain ? {} : { ingredientPairs: found }),
           ...detail,
         });

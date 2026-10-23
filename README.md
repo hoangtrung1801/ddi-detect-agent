@@ -4,6 +4,58 @@ A Python-based graph data structure for efficiently storing and searching drug-d
 
 **🚀 NEW: AI-Powered Conversational Agent!** Ask questions about drug interactions in natural language using LangChain and OpenAI. See [AI Agent with LangChain](#ai-agent-with-langchain) section below or check out the [Quick Start Guide](QUICK_START.md).
 
+## Current TypeScript server and DDInter 2.0 data
+
+The active `server/` backend uses the official [DDInter 2.0 category CSV exports](https://ddinter2.scbdd.com/download/). The earlier Python examples below are historical; their prebuilt GraphML, pickle, and NumPy artifacts are not used by the TypeScript server and were not migrated.
+
+From `server/`:
+
+```sh
+pnpm install
+pnpm data:download
+pnpm data:build
+pnpm start
+```
+
+Stop running backend processes before rebuilding, and restart them afterward: an already-open SQLite connection and resolver retain the previous catalog. `data:build` stages the database, name list, and embeddings before replacing active files; it does not hot-swap a running server. `APP_DB_PATH` session/cabinet data is not replaced.
+
+- `data:download` downloads all eight files currently linked by the official page (ATC A, B, D, H, L, P, R, V), saves originals under `server/data/ddinter/raw/`, and replaces root `db_drug_interactions.csv` with deterministic, deduplicated records. The processed columns are `drug_1,drug_2,condition,drug_1_id,drug_2_id,level,source_rows`.
+- `server/data/ddinter/manifest.json` records source URLs, retrieval times, original SHA-256 checksums, processed checksum, license, website update date, coverage, and counts. The same manifest is stored in SQLite `dataset_metadata`. The manifest and processed CSV are versioned; original downloads and generated database/vector files are local build artifacts.
+- `data:build` verifies the processed CSV against the manifest, imports `server/data/ddi.sqlite`, and regenerates matching `drug-names.json` and 384-dimensional `drug-vectors.f32`. It does not import the old unprovenanced dataset or legacy GraphML. It can rebuild from the processed CSV and manifest without downloading again.
+- The 2026-10-23 acquisition contains **222,383 source rows**, **62,148 overlapping rows**, **160,235 unique unordered interaction pairs**, and **1,939 drugs**. Pair risk levels: Major 26,914; Moderate 96,675; Minor 6,833; Unknown 29,813. These exports are **not the full 302,516 associations / 2,290 drugs advertised by the website** (website update date: 2024-05-14).
+- Export columns contain identifiers, drug names, and risk levels only. `condition` in the processed CSV remains a generated, explicitly labelled risk summary—not an original mechanism description. Enriched runtime lookups prefer crawled source descriptions when available, with the full page evidence kept separately.
+- Category overlaps are deduplicated by unordered DDInter IDs and risk level. Every original filename/CSV record number is preserved in `source_rows`; different source risk records/descriptions remain in `interaction_records` rather than overwriting one another. CSV endpoint order does not establish pharmacological direction.
+- Report `source_records` carries DDInter IDs and risk levels. `severity_source` distinguishes DDInter from model estimates. Known DDInter severity overrides AI guesses; Unknown is not converted to minor/moderate. A grouped pair with Unknown and lower known risks remains unknown unless a major risk is established. Absence of a record never proves safety.
+- Aliases for thiamine/B1, riboflavin/B2, and ubidecarenone/CoQ10 were removed because their targets are absent from the downloaded catalog; they are no longer guaranteed alias matches. Generic Vitamin D maps to the catalog's `Vitamin D`, while D3 maps to `Cholecalciferol`.
+- Vector-only matching does not expand a broad input into a longer name with that exact prefix (for example, `Insulin` must not silently become `Insulin detemir`). Explicit forms and supported aliases still resolve. This is a conservative specificity check, not clinical validation of all name matches.
+- Coverage gaps are real: the downloaded subset has no record for `Fluoxetine + Tramadol` or `Digoxin + Furosemide`, despite both drug names being available. The golden evaluation cases now reflect the imported subset, not a claim of clinical absence.
+
+**Data license and attribution:** DDInter 2.0, curated by the DDInter team, <https://ddinter2.scbdd.com/>. Data and the processed derivative are provided under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/), subject to [DDInter terms](https://ddinter2.scbdd.com/terms/); this migration deduplicates category exports and adds provenance and labelled risk summaries. The software license does not override the dataset license. Do not use the data commercially without appropriate permission. DDInter and this application do not guarantee completeness or clinical accuracy.
+
+### Enrich only current interaction pairs
+
+From `server/`:
+
+```sh
+pnpm data:crawl
+pnpm data:crawl:status
+```
+
+`data:crawl` runs until discovery and the pending queue are exhausted or the process is stopped. It is a long-running foreground command; keep the machine awake. A single process starts at most one request per second and respects access denials, robots restrictions, and HTTP 429 Retry-After deadlines. It uses direct HTTP, not browser automation or guessed sequential page bounds.
+
+- The target snapshot is the existing catalog: **160,235 unordered drug pairs**. A greedy endpoint cover selects 906 current drug IDs for public, paginated `/server/interact-with/<drug-id>/` discovery. Only page IDs matching current source-ID pairs are queued for `/server/interact/<id>/`; out-of-catalog pairs are not imported.
+- `server/data/ddinter/crawl.sqlite` checkpoints discovery offsets, queued/completed/missing/error pages, compressed source HTML, parsed evidence, page URLs, retrieval times, and SHA-256 hashes. An exclusive PID lock prevents duplicate crawler instances. Resume with the same command after interruption; completed pages are not downloaded again. The archive is tied to the exact target catalog.
+- Each verified page is applied immediately to `interaction_details` in `server/data/ddi.sqlite`, keyed by source drug IDs. Drug names, pair membership, original CSV evidence, and imported severity are not replaced. Multiple website records for the same pair are retained.
+- Extracted fields are the pair's interaction description, mechanism categories, management text, and references. A source `-` stays null. Alternative-drug lists and generic CYP footer advice are deliberately excluded; they are not personalized management guidance.
+- Reports expose crawled evidence in `source_records[].details`, including per-page risk levels. Page/CSV risk disagreements remain visible; the imported CSV severity is not silently changed. The UI distinguishes source quotes from AI interpretation.
+- Restart an already-running backend once to load the new lookup implementation/database handle. Subsequent successful imports become visible on new lookups without restarting it.
+- Ctrl+C pauses a foreground crawl safely. For a background crawler, send SIGINT to the PID recorded in `server/data/ddinter/crawl.sqlite.lock`. Stop the crawler before `pnpm data:build`; rebuilding refuses while its lock is present and restores completed evidence from the archive into the staged database.
+- For a bounded run after stopping any active crawler: `pnpm data:crawl --max-pages=10`. A specific known page can be checked with `pnpm data:crawl --page-ids=23`, but it must map to a current pair. Neither mode claims full enrichment.
+- `completed` means all target pairs have at least one successfully fetched page and discovery is exhausted. `completed_with_gaps` means discovery finished but targets/pages remain missing; `paused` and `error` are not completion. Use live status counts rather than assuming every pair has already been enriched.
+
+The category CSV coverage limit and CC BY-NC-SA 4.0 restrictions above still apply. Crawling existing pairs adds source annotations, not new interaction coverage or a claim of clinical validation.
+
+
 ## Features
 
 - **Fast lookups**: O(1) average time complexity for finding interactions between two drugs
@@ -474,15 +526,11 @@ Typical performance on a modern laptop:
 
 ## Data Sources
 
-This library is designed to work with drug interaction data from sources such as:
-- DrugBank
-- FDA Adverse Event Reporting System (FAERS)
-- SIDER (Side Effect Resource)
-- Custom pharmaceutical databases
+The active TypeScript database is derived from DDInter 2.0's official downloads; see the acquisition, provenance, coverage, and licensing details above. The previous bundled dataset's original provider was not documented and is no longer the production build input.
 
 ## License
 
-MIT License - feel free to use in your projects!
+Software: MIT License. **DDInter data and its processed derivatives are separately licensed CC BY-NC-SA 4.0**, not MIT; see the data licensing section above.
 
 ## Contributing
 

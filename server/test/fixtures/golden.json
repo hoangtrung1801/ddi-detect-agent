@@ -121,17 +121,17 @@
     {
      "a": "Metformin",
      "b": "Omeprazole",
-     "status": "no_record"
+     "status": "interaction"
     },
     {
      "a": "Metformin",
      "b": "Lisinopril",
-     "status": "no_record"
+     "status": "interaction"
     },
     {
      "a": "Omeprazole",
      "b": "Lisinopril",
-     "status": "no_record"
+     "status": "interaction"
     }
    ],
    "unresolved_pairs": 0
@@ -168,7 +168,7 @@
     {
      "a": "Warfarin",
      "b": "Digoxin",
-     "status": "no_record"
+     "status": "interaction"
     },
     {
      "a": "Ibuprofen",
@@ -183,7 +183,7 @@
     {
      "a": "Omeprazole",
      "b": "Digoxin",
-     "status": "no_record"
+     "status": "interaction"
     }
    ],
    "unresolved_pairs": 0
@@ -212,7 +212,7 @@
     {
      "a": "Atorvastatin",
      "b": "Clopidogrel",
-     "status": "no_record"
+     "status": "interaction"
     },
     {
      "a": "Atorvastatin",
@@ -222,12 +222,12 @@
     {
      "a": "Atorvastatin",
      "b": "Amlodipine",
-     "status": "interaction"
+     "status": "no_record"
     },
     {
      "a": "Atorvastatin",
      "b": "Metformin",
-     "status": "no_record"
+     "status": "interaction"
     },
     {
      "a": "Clopidogrel",
@@ -242,22 +242,22 @@
     {
      "a": "Clopidogrel",
      "b": "Metformin",
-     "status": "no_record"
+     "status": "interaction"
     },
     {
      "a": "Omeprazole",
      "b": "Amlodipine",
-     "status": "no_record"
+     "status": "interaction"
     },
     {
      "a": "Omeprazole",
      "b": "Metformin",
-     "status": "no_record"
+     "status": "interaction"
     },
     {
      "a": "Amlodipine",
      "b": "Metformin",
-     "status": "no_record"
+     "status": "interaction"
     }
    ],
    "unresolved_pairs": 0
@@ -320,7 +320,7 @@
     {
      "a": "Ascorbic acid",
      "b": "Warfarin",
-     "status": "no_record"
+     "status": "interaction"
     }
    ],
    "unresolved_pairs": 0
@@ -366,7 +366,7 @@
     {
      "a": "Caffeine",
      "b": "Ciprofloxacin",
-     "status": "no_record"
+     "status": "interaction"
     }
    ],
    "unresolved_pairs": 0
@@ -412,7 +412,7 @@
     {
      "a": "Atorvastatin",
      "b": "Clopidogrel",
-     "status": "no_record"
+     "status": "interaction"
     }
    ],
    "unresolved_pairs": 0
@@ -435,7 +435,7 @@
     {
      "a": "Esomeprazole",
      "b": "Simvastatin",
-     "status": "no_record"
+     "status": "interaction"
     }
    ],
    "unresolved_pairs": 0
@@ -458,7 +458,7 @@
     {
      "a": "Sildenafil",
      "b": "Tramadol",
-     "status": "interaction"
+     "status": "no_record"
     }
    ],
    "unresolved_pairs": 0
@@ -481,7 +481,7 @@
     {
      "a": "Acetaminophen",
      "b": "Salbutamol",
-     "status": "no_record"
+     "status": "interaction"
     }
    ],
    "unresolved_pairs": 0
@@ -527,7 +527,7 @@
     {
      "a": "Fluoxetine",
      "b": "Tramadol",
-     "status": "interaction"
+     "status": "no_record"
     }
    ],
    "unresolved_pairs": 0
@@ -567,7 +567,7 @@
     {
      "a": "Digoxin",
      "b": "Furosemide",
-     "status": "interaction"
+     "status": "no_record"
     }
    ],
    "unresolved_pairs": 0
@@ -590,7 +590,7 @@
     {
      "a": "Ciprofloxacin",
      "b": "Diclofenac",
-     "status": "no_record"
+     "status": "interaction"
     }
    ],
    "unresolved_pairs": 0
@@ -606,11 +606,17 @@
   },
   "expect": {
    "resolved": {
-    "St John's wort": null,
+    "St John's wort": "St. John's Wort",
     "Sertraline": "Sertraline"
    },
-   "pairs": [],
-   "unresolved_pairs": 1
+   "pairs": [
+    {
+     "a": "St. John's Wort",
+     "b": "Sertraline",
+     "status": "no_record"
+    }
+   ],
+   "unresolved_pairs": 0
   }
  },
  {

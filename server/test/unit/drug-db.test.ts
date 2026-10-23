@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { makeDomain } from '../helpers/domain.ts';
 
 describe('build + DrugDb', () => {
-  it('builds drugs and undirected edges, duplicate pair: last row wins', async () => {
+  it('preserves distinct descriptions for an unordered pair', async () => {
     const { drugDb, stats } = await makeDomain();
     expect(stats.rows).toBe(9);
     expect(stats.drugs).toBe(10);
@@ -12,8 +12,11 @@ describe('build + DrugDb', () => {
     const w = drugDb.getDrug('  WARFARIN ')!;
     const i = drugDb.getDrug('ibuprofen')!;
     const rec = drugDb.lookupPair(w, i)!;
-    expect(rec.condition).toMatch(/risk or severity of bleeding/);
-    expect(rec.firstNamed).toBe('Warfarin');
+    expect(rec.condition.split('\n')).toEqual([
+      'Ibuprofen may increase the anticoagulant activities of Warfarin.',
+      'The risk or severity of bleeding can be increased when Warfarin is combined with Ibuprofen.',
+    ]);
+    expect(rec.firstNamed).toBe('Ibuprofen');
     // undirected
     expect(drugDb.lookupPair(i, w)).toEqual(rec);
   });

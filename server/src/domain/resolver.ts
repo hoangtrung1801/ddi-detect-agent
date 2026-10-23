@@ -125,7 +125,10 @@ export class Resolver {
     const [qv] = await this.#embedder.embed([query]);
     const top = qv ? this.#topK(qv, 3) : [];
     const best = top[0];
-    if (best && best.score >= this.#min) {
+    // A broad substance/class must not silently become a more-specific form in the expanded catalog.
+    // Exact names and explicit aliases above remain authoritative; keep candidates for clarification.
+    const narrowsInput = best ? cleanName(best.name).startsWith(`${query} `) : false;
+    if (best && best.score >= this.#min && !narrowsInput) {
       return {
         input,
         generic,

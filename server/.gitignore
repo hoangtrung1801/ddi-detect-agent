@@ -1,5 +1,8 @@
 node_modules/
-data/
+data/*
+!data/ddinter/
+data/ddinter/*
+!data/ddinter/manifest.json
 .env
 *.sqlite
 *.sqlite-wal

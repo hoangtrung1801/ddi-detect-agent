@@ -1,60 +1,68 @@
-// CSV -> data/ddi.sqlite + data/drug-vectors.f32 + data/drug-names.json (replaces GraphML + pickle).
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+// Build the DDInter database and matching embeddings before replacing active artifacts.
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import { buildDdiDb } from '../src/domain/build-db.ts';
 import { createTransformersEmbedder } from '../src/domain/embedder.ts';
 import { parseInteractionCsv } from '../src/util/csv.ts';
-import { normName } from '../src/util/norm.ts';
+import { applyInteractionDetail } from '../src/domain/ddinter-details.ts';
 
-// Expected counts for db_drug_interactions.csv (191,541 rows). 191,135 unique undirected pairs; the legacy
-// GraphML reports 191,136 edges / 1,702 nodes because it is stale (extra Alcohol-Acetaminophen edge), see plan log.
-const EXPECT = { rows: 191541, drugs: 1701, interactions: 191135 };
-
-const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
-const csvPath = process.env.CSV_PATH ?? here('../../db_drug_interactions.csv');
-const outDir = process.env.DATA_DIR ?? here('../data');
-const isDefault = !process.env.CSV_PATH;
-
-console.log(`reading ${csvPath}`);
-const rows = parseInteractionCsv(readFileSync(csvPath, 'utf8'));
+const csvPath = fileURLToPath(new URL('../../db_drug_interactions.csv', import.meta.url));
+const outDir = process.env.DATA_DIR ?? fileURLToPath(new URL('../data', import.meta.url));
+const manifestPath = `${outDir}/ddinter/manifest.json`;
+const archivePath = `${outDir}/ddinter/crawl.sqlite`;
+if (existsSync(`${archivePath}.lock`)) throw new Error('Stop the DDInter crawler before rebuilding the database; resume it afterward.');
+if (!existsSync(manifestPath)) throw new Error('Missing DDInter source manifest. Run pnpm data:download first.');
+const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+const csv = readFileSync(csvPath, 'utf8');
+if (createHash('sha256').update(csv).digest('hex') !== manifest.processed.sha256) throw new Error('Processed CSV checksum differs from DDInter manifest');
+const rows = parseInteractionCsv(csv);
+if (rows.length !== manifest.records || rows.some((r) => !r.drug_1_id || !r.drug_2_id || !r.level || !r.source_rows)) {
+  throw new Error('Expected processed DDInter records with IDs, levels and provenance');
+}
 mkdirSync(outDir, { recursive: true });
-const dbPath = `${outDir}/ddi.sqlite`;
-rmSync(dbPath, { force: true });
-const db = new Database(dbPath);
-db.pragma('journal_mode = DELETE');
-const stats = buildDdiDb(db, rows);
-db.close();
-console.log(`rows=${stats.rows} drugs=${stats.drugs} interactions=${stats.interactions}`);
-
-const failures: string[] = [];
-if (isDefault) {
-  for (const k of ['rows', 'drugs', 'interactions'] as const) {
-    if (stats[k] !== EXPECT[k]) failures.push(`${k}: got ${stats[k]}, expected ${EXPECT[k]}`);
+const staging = mkdtempSync(`${outDir}/.ddinter-build-`);
+let db: Database.Database | undefined;
+try {
+  db = new Database(`${staging}/ddi.sqlite`);
+  db.pragma('foreign_keys = ON');
+  const stats = buildDdiDb(db, rows);
+  if (stats.drugs !== manifest.drugs) throw new Error('Drug count differs from source manifest');
+  db.prepare('INSERT INTO dataset_metadata(key,value) VALUES (?,?)').run('manifest', JSON.stringify(manifest));
+  if (existsSync(archivePath)) {
+    const archive = new Database(archivePath, { readonly: true });
+    let applied = 0;
+    try {
+      db.transaction(() => {
+        for (const row of archive.prepare("SELECT detail_json FROM pages WHERE state='done' ORDER BY id").iterate() as Iterable<{ detail_json: string }>) {
+          if (applyInteractionDetail(db!, JSON.parse(row.detail_json))) applied++;
+        }
+      })();
+      db.prepare('INSERT INTO dataset_metadata(key,value) VALUES (?,?)').run('enrichment', JSON.stringify({ archive: 'ddinter/crawl.sqlite', applied }));
+      console.log(`Restored ${applied} crawled source pages from the enrichment archive.`);
+    } finally { archive.close(); }
   }
-  const mapping = here('../../drug_embeddings_mapping.json');
-  if (existsSync(mapping)) {
-    const py = new Set<string>((JSON.parse(readFileSync(mapping, 'utf8')).drug_names as string[]).map(normName));
-    const mine = new Set(stats.names.map(normName));
-    const missing = [...py].filter((x) => !mine.has(x)).length;
-    const extra = [...mine].filter((x) => !py.has(x)).length;
-    console.log(`drug-name parity with Python embeddings mapping: missing=${missing} extra=${extra}`);
-    if (missing || extra) failures.push('drug names differ from drug_embeddings_mapping.json');
+  if (db.pragma('integrity_check', { simple: true }) !== 'ok' || (db.pragma('foreign_key_check') as unknown[]).length) throw new Error('Database integrity failed');
+  db.close(); db = undefined;
+  console.log(`DDInter rows=${stats.rows} drugs=${stats.drugs} pairs=${stats.interactions}`);
+  const embedder = await createTransformersEmbedder();
+  const flat = new Float32Array(stats.names.length * embedder.dim);
+  // Bound embedding memory on large catalogs.
+  for (let start = 0; start < stats.names.length; start += 64) {
+    const vectors = await embedder.embed(stats.names.slice(start, start + 64));
+    if (vectors.length !== Math.min(64, stats.names.length - start)) throw new Error('Embedding count mismatch');
+    vectors.forEach((v, i) => {
+      if (v.length !== embedder.dim || !v.every(Number.isFinite)) throw new Error('Invalid embedding');
+      flat.set(v, (start + i) * embedder.dim);
+    });
   }
+  writeFileSync(`${staging}/drug-vectors.f32`, Buffer.from(flat.buffer));
+  writeFileSync(`${staging}/drug-names.json`, JSON.stringify(stats.names));
+  // Offline rebuild: stop the server first so no process retains an old database/catalog.
+  for (const file of ['drug-vectors.f32', 'drug-names.json', 'ddi.sqlite']) renameSync(`${staging}/${file}`, `${outDir}/${file}`);
+  console.log(`Replaced DDInter database and ${stats.drugs} x ${embedder.dim} vectors.`);
+} finally {
+  db?.close();
+  rmSync(staging, { recursive: true, force: true });
 }
-
-console.log('embedding drug names (Xenova/all-MiniLM-L6-v2)...');
-const embedder = await createTransformersEmbedder();
-const vecs = await embedder.embed(stats.names);
-const flat = new Float32Array(vecs.length * embedder.dim);
-vecs.forEach((v, i) => flat.set(v, i * embedder.dim));
-writeFileSync(`${outDir}/drug-vectors.f32`, Buffer.from(flat.buffer));
-writeFileSync(`${outDir}/drug-names.json`, JSON.stringify(stats.names));
-console.log(`wrote ${vecs.length} x ${embedder.dim} vectors`);
-if (vecs.length !== stats.drugs) failures.push('vector count != drug count');
-
-if (failures.length) {
-  console.error('COUNT CHECKS FAILED:\n  ' + failures.join('\n  '));
-  process.exit(1);
-}
-console.log('count checks OK');

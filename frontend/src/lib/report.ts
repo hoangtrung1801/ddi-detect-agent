@@ -24,12 +24,39 @@ export interface IngredientPair {
   condition: string;
 }
 
+export interface InteractionDetail {
+  pageId: number;
+  drugAId: string;
+  drugBId: string;
+  drugAName: string;
+  drugBName: string;
+  level: "Major" | "Moderate" | "Minor" | "Unknown";
+  mechanisms: string[];
+  description: string | null;
+  management: string | null;
+  references: string[];
+  url: string;
+  retrievedAt: string;
+  sha256: string;
+}
+
+export interface SourceInteractionRecord {
+  source: "DDInter 2.0";
+  drugAId: string;
+  drugBId: string;
+  level: string;
+  url: string;
+  details?: InteractionDetail[];
+}
+
 export interface ReportPair {
   a: string;
   b: string;
   status: PairStatus;
   severity?: Severity;
   db_condition?: string;
+  severity_source?: "DDInter 2.0" | "model";
+  source_records?: SourceInteractionRecord[];
   /** Pairs involving a multi-ingredient product: the ingredient pairs the database records. */
   ingredient_pairs?: IngredientPair[];
   explanation: string;
@@ -74,6 +101,8 @@ export interface PairResult {
   b: string;
   status: PairStatus;
   condition?: string;
+  sourceSeverity?: Severity;
+  sourceRecords?: SourceInteractionRecord[];
 }
 
 export type ProgressEvent =
@@ -85,9 +114,9 @@ export type ProgressEvent =
   | { type: "links"; links: Record<string, LinkInfo> };
 
 /** One visual category per pair: interaction severities plus the two "unknown" states. */
-export type PairKind = Severity | "no_record" | "unresolved";
+export type PairKind = Severity | "unknown" | "no_record" | "unresolved";
 
-export const KIND_ORDER: PairKind[] = ["major", "moderate", "minor", "no_record", "unresolved"];
+export const KIND_ORDER: PairKind[] = ["major", "unknown", "moderate", "minor", "no_record", "unresolved"];
 
 export interface KindMeta {
   label: string;
@@ -140,6 +169,17 @@ export const KIND_META: Record<PairKind, KindMeta> = {
     dashed: false,
     level: 1,
   },
+  unknown: {
+    label: "Có tương tác · chưa rõ mức độ",
+    short: "Chưa rõ mức độ",
+    badge: "bg-neutral-soft text-neutral-ink border border-neutral-line",
+    soft: "bg-neutral-soft text-neutral-ink border border-neutral-line",
+    fill: "bg-neutral-soft border border-neutral-line",
+    stroke: "var(--color-neutral-stroke)",
+    width: 3,
+    dashed: true,
+    level: null,
+  },
   no_record: {
     label: "Chưa có dữ liệu",
     short: "Chưa có DL",
@@ -166,8 +206,7 @@ export const KIND_META: Record<PairKind, KindMeta> = {
 
 export function pairKind(p: { status: PairStatus; severity?: Severity }): PairKind {
   if (p.status !== "interaction") return p.status;
-  // The server scores a missing severity as medium risk; show it the same way.
-  return p.severity ?? "moderate";
+  return p.severity ?? "unknown";
 }
 
 export function pairId(p: { a: string; b: string }): string {

@@ -58,10 +58,16 @@ export async function buildReport(draft: ReportDraft, ctx: RunContext): Promise<
       const out: ReportPair = {
         ...base,
         db_condition: r.condition ?? '',
+        ...(r.sourceRecords?.length ? { source_records: r.sourceRecords, severity_source: 'DDInter 2.0' as const } : {}),
         ...(r.ingredientPairs?.length ? { ingredient_pairs: r.ingredientPairs.map(({ a, b, condition }) => ({ a, b, condition })) } : {}),
         explanation: d?.explanation?.trim() || `Cơ sở dữ liệu ghi nhận: ${r.condition}`,
       };
-      if (d?.severity) out.severity = d.severity as Severity;
+      if (r.sourceRecords?.length) {
+        if (r.sourceSeverity) out.severity = r.sourceSeverity;
+      } else if (d?.severity) {
+        out.severity = d.severity as Severity;
+        out.severity_source = 'model';
+      }
       return out;
     }
     let explanation = fixedExplanation(r);

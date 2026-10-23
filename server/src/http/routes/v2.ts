@@ -3,10 +3,12 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { V2ChatRequestSchema, V2InteractionsRequestSchema } from '../../schemas/api.ts';
 import type { AppServices } from '../services.ts';
+import { v2GraphRoutes } from './v2-graph.ts';
 import { HttpError, STATUS_FOR_CODE, logRun, readBody, runSink } from '../util.ts';
 
 export function v2Routes(s: AppServices): Hono {
   const r = new Hono();
+  r.route('/', v2GraphRoutes(s));
 
   r.post('/interactions', async (c) => {
     const body = await readBody(c, V2InteractionsRequestSchema);

@@ -190,10 +190,48 @@ async function readSSE(body: ReadableStream<Uint8Array>, onEvent: (event: string
   }
 }
 
+export interface GraphNode {
+  id: string;
+  /** Number of drugs it interacts with across the whole database. */
+  degree: number;
+  seed: boolean;
+}
+
+export interface GraphLink {
+  /** drug_1 in the source data: usually the drug that causes the effect on `target`. */
+  source: string;
+  target: string;
+  condition: string;
+}
+
+export interface GraphResponse {
+  nodes: GraphNode[];
+  links: GraphLink[];
+  resolved: { input: string; name: string }[];
+  unresolved: string[];
+}
+
 /** A drug name, or a product (e.g. a supplement read from a photo) whose ingredients are checked as one drug. */
 export type DrugInput = string | { name: string; ingredients: string[] };
 
 export const v2API = {
+  /** The named drugs plus their most-connected partners; with no drugs, the database's hubs. */
+  graph: async (drugs: string[], neighbors: number, signal?: AbortSignal): Promise<GraphResponse> => {
+    const response = await api.get<GraphResponse>("/v2/graph", {
+      params: drugs.length ? { drugs: drugs.join(","), neighbors } : { hubs: 40 },
+      signal,
+    });
+    return response.data;
+  },
+
+  searchDrugs: async (q: string, signal?: AbortSignal): Promise<{ name: string; degree: number }[]> => {
+    const response = await api.get<{ results: { name: string; degree: number }[] }>("/v2/drugs/search", {
+      params: { q, limit: 8 },
+      signal,
+    });
+    return response.data.results;
+  },
+
   /** Runs the interaction agent and streams progress; resolves with the final report. */
   checkInteractions: async (
     drugs: DrugInput[],

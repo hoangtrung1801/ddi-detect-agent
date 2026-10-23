@@ -243,3 +243,44 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Landing page scroll motion (CSS scroll-driven animations). Browsers without
+   support, and people who prefer reduced motion, get the static page. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes lp-px-y { to { translate: 0 var(--lp-d); } }
+    @keyframes lp-drift-y { from { translate: 0 var(--lp-from); } to { translate: 0 var(--lp-to); } }
+    @keyframes lp-drift-x { from { translate: var(--lp-from) 0; } to { translate: var(--lp-to) 0; } }
+    @keyframes lp-hero-out { to { translate: 0 140px; opacity: 0.1; scale: 0.94; } }
+    @keyframes lp-pop { from { opacity: 0; scale: 0.55; } }
+    @keyframes lp-draw { from { clip-path: inset(0 100% 0 0); } }
+    @keyframes lp-drop { from { opacity: 0; translate: 0 -28px; } }
+    @keyframes lp-rise { from { opacity: 0; translate: 0 40px; } }
+    @keyframes lp-grow { from { scale: 0 1; } }
+
+    .lp-hero { view-timeline: --lp-hero block; }
+    .lp-px { animation: lp-px-y linear both; animation-timeline: --lp-hero; animation-range: exit 0% exit 100%; }
+    .lp-px-slow { --lp-d: 90px; }
+    .lp-px-mid { --lp-d: 220px; }
+    .lp-px-fast { --lp-d: 420px; }
+    .lp-px-up { --lp-d: -160px; }
+    .lp-hero-copy { animation: lp-hero-out linear both; animation-timeline: --lp-hero; animation-range: exit 0% exit 85%; }
+
+    /* The pinned map builds itself while the story section scrolls past (wide screens only). */
+    @media (min-width: 64rem) {
+      .lp-story { view-timeline: --lp-story block; }
+      .lp-st-node { animation: lp-pop linear both; animation-timeline: --lp-story; animation-range: contain 0% contain 16%; }
+      .lp-st-lines { animation: lp-draw linear both; animation-timeline: --lp-story; animation-range: contain 14% contain 42%; }
+      .lp-st-chip { animation: lp-pop linear both; animation-timeline: --lp-story; animation-range: contain 40% contain 54%; }
+      .lp-st-risk { animation: lp-drop linear both; animation-timeline: --lp-story; animation-range: contain 56% contain 70%; }
+      .lp-st-detail { animation: lp-rise linear both; animation-timeline: --lp-story; animation-range: contain 68% contain 82%; }
+      .lp-col-a { --lp-from: 60px; --lp-to: -60px; animation: lp-drift-y linear both; animation-timeline: view(); animation-range: cover; }
+      .lp-col-b { --lp-from: 160px; --lp-to: -160px; animation: lp-drift-y linear both; animation-timeline: view(); animation-range: cover; }
+    }
+
+    .lp-reveal { animation: lp-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 70%; }
+    .lp-grow { transform-origin: left center; animation: lp-grow linear both; animation-timeline: view(); animation-range: entry 20% cover 45%; }
+    .lp-cta-l { --lp-from: -220px; --lp-to: 120px; animation: lp-drift-x linear both; animation-timeline: view(); animation-range: cover; }
+    .lp-cta-r { --lp-from: 220px; --lp-to: -160px; animation: lp-drift-x linear both; animation-timeline: view(); animation-range: cover; }
+  }
+}

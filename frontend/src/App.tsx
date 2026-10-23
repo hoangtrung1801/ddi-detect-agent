@@ -2,11 +2,12 @@ import { useState } from "react";
 import { InteractionCheckPage } from "@/components/InteractionCheckPage";
 import { PatientProfile } from "@/components/PatientProfile";
 import { LoginDialog } from "@/components/LoginDialog";
+import { LandingPage } from "@/components/landing/LandingPage";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import useAuthStore from "@/stores/use-auth-store";
 
-type Page = "interaction" | "cabinet";
+type Page = "home" | "interaction" | "cabinet";
 
 const NAV: { id: Page; label: string }[] = [
   { id: "interaction", label: "Kiểm tra tương tác" },
@@ -25,59 +26,74 @@ function Logo() {
 }
 
 function App() {
-  const [page, setPage] = useState<Page>("interaction");
-  // Drugs handed from the cabinet to the check page; the run counter remounts the page for a fresh check.
+  const [page, setPage] = useState<Page>("home");
+  // Drugs handed to the check page (from the landing page or the cabinet); the run counter remounts the page for a fresh check.
   const [prefill, setPrefill] = useState<{ drugs: string[]; run: number } | null>(null);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const { user, isAuthenticated } = useAuthStore();
 
-  const checkDrugs = (drugs: string[]) => {
-    setPrefill((p) => ({ drugs, run: (p?.run ?? 0) + 1 }));
-    setPage("interaction");
+  const go = (p: Page) => {
+    setPage(p);
     window.scrollTo({ top: 0 });
   };
 
+  const checkDrugs = (drugs: string[]) => {
+    setPrefill((p) => ({ drugs, run: (p?.run ?? 0) + 1 }));
+    go("interaction");
+  };
+
+  const home = (
+    <button type="button" onClick={() => go("home")} className="flex items-center gap-2.5">
+      <Logo />
+      <span className="text-lg font-bold tracking-tight">DDISafe</span>
+    </button>
+  );
+
+  const account =
+    isAuthenticated && user ? (
+      <button type="button" onClick={() => go("cabinet")} className="flex min-h-11 items-center gap-2.5">
+        <span className="flex size-9 items-center justify-center rounded-full bg-brand-soft font-bold text-brand-ink">
+          {(user.name || user.email).charAt(0).toUpperCase()}
+        </span>
+        <span className="max-w-40 truncate font-semibold">{user.name || user.email}</span>
+      </button>
+    ) : (
+      <Button variant="outline" className="h-11 px-4 font-semibold" onClick={() => setIsLoginOpen(true)}>
+        Đăng nhập
+      </Button>
+    );
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <header className="border-b bg-card print:hidden">
-        <div className="mx-auto flex w-full max-w-[1280px] flex-wrap items-center gap-x-8 gap-y-3 px-4 py-3 sm:px-6">
-          <button type="button" onClick={() => setPage("interaction")} className="flex items-center gap-2.5">
-            <Logo />
-            <span className="text-lg font-bold tracking-tight">DDISafe</span>
-          </button>
-          <nav aria-label="Điều hướng chính" className="flex flex-1 flex-wrap gap-1">
-            {NAV.map((n) => (
-              <button
-                key={n.id}
-                type="button"
-                aria-current={page === n.id ? "page" : undefined}
-                onClick={() => setPage(n.id)}
-                className={cn(
-                  "min-h-11 rounded-lg px-3.5 text-[15px] transition-colors",
-                  page === n.id ? "bg-brand-soft font-semibold text-brand-ink" : "font-medium text-neutral-ink hover:bg-muted",
-                )}
-              >
-                {n.label}
-              </button>
-            ))}
-          </nav>
-          {isAuthenticated && user ? (
-            <button type="button" onClick={() => setPage("cabinet")} className="flex min-h-11 items-center gap-2.5">
-              <span className="flex size-9 items-center justify-center rounded-full bg-brand-soft font-bold text-brand-ink">
-                {(user.name || user.email).charAt(0).toUpperCase()}
-              </span>
-              <span className="max-w-40 truncate font-semibold">{user.name || user.email}</span>
-            </button>
-          ) : (
-            <Button variant="outline" className="h-11 px-4 font-semibold" onClick={() => setIsLoginOpen(true)}>
-              Đăng nhập
-            </Button>
-          )}
-        </div>
-      </header>
+      {page !== "home" && (
+        <header className="border-b bg-card print:hidden">
+          <div className="mx-auto flex w-full max-w-[1280px] flex-wrap items-center gap-x-8 gap-y-3 px-4 py-3 sm:px-6">
+            {home}
+            <nav aria-label="Điều hướng chính" className="flex flex-1 flex-wrap gap-1">
+              {NAV.map((n) => (
+                <button
+                  key={n.id}
+                  type="button"
+                  aria-current={page === n.id ? "page" : undefined}
+                  onClick={() => go(n.id)}
+                  className={cn(
+                    "min-h-11 rounded-lg px-3.5 text-[15px] transition-colors",
+                    page === n.id ? "bg-brand-soft font-semibold text-brand-ink" : "font-medium text-neutral-ink hover:bg-muted",
+                  )}
+                >
+                  {n.label}
+                </button>
+              ))}
+            </nav>
+            {account}
+          </div>
+        </header>
+      )}
 
       <main className="flex-1">
-        {page === "interaction" ? (
+        {page === "home" ? (
+          <LandingPage logo={home} account={account} onStart={checkDrugs} onOpenCheck={() => go("interaction")} />
+        ) : page === "interaction" ? (
           <InteractionCheckPage key={prefill?.run ?? 0} initialDrugs={prefill?.drugs} onRequireLogin={() => setIsLoginOpen(true)} />
         ) : (
           <PatientProfile onCheckDrugs={checkDrugs} onRequireLogin={() => setIsLoginOpen(true)} />
@@ -86,7 +102,7 @@ function App() {
 
       <footer className="border-t bg-card print:hidden">
         <div className="mx-auto flex w-full max-w-[1280px] flex-wrap justify-between gap-2 px-4 py-4 text-sm text-muted-foreground sm:px-6">
-          <span>DDISafe — phát hiện tương tác thuốc bằng AI</span>
+          <span>DDISafe — phát hiện tương tác thuốc bằng AI. Thông tin chỉ mang tính tham khảo.</span>
           <a
             href="https://github.com/hoangtrung1801/ddi-detect-agent"
             target="_blank"

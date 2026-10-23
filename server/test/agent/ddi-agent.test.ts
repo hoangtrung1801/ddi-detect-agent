@@ -213,3 +213,105 @@ describe('DDI agent: nothing resolvable', () => {
     expect(r.report.overall_risk).toBe('unknown');
   });
 });
+
+describe('DDI agent: multi-ingredient products', () => {
+  const supplement = { name: 'GH Creation EX+', ingredients: ['Acetaminophen', 'Cetirizine', 'Dried yeast'] };
+
+  it('checks a product as ONE drug; ingredient interactions surface in the pair, not as extra drugs', async () => {
+    const env = await makeAgentEnv();
+    env.setResponses([
+      call('resolve_drugs', { drugs: [{ input: 'GH Creation EX+' }, { input: 'Coumadin', generic_guess: 'warfarin' }] }),
+      call('check_interactions', { drugs: ['GH Creation EX+', 'Warfarin'] }),
+      call('submit_report', draft([{ a: 'GH Creation EX+', b: 'Warfarin', severity: 'major', explanation: 'Acetaminophen trong GH Creation EX+ làm tăng nguy cơ chảy máu với Warfarin.' }])),
+    ]);
+    const r = await env.agent.run({ drugs: [supplement, 'Coumadin'] }, { sink: env.sink });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // two drugs, one pair
+    expect(r.report.drugs.map((d) => d.input)).toEqual(['GH Creation EX+', 'Coumadin']);
+    expect(r.report.pairs).toHaveLength(1);
+    const p = r.report.pairs[0]!;
+    expect(p).toMatchObject({ a: 'GH Creation EX+', b: 'Warfarin', status: 'interaction', severity: 'major' });
+    expect(p.ingredient_pairs).toEqual([
+      { a: 'Acetaminophen', b: 'Warfarin', condition: 'Acetaminophen may increase the anticoagulant activities of Warfarin, leading to bleeding.' },
+    ]);
+    expect(p.explanation).toMatch(/Acetaminophen trong GH Creation/);
+    const product = r.report.drugs[0]!;
+    expect(product.dbName).toBe('GH Creation EX+');
+    expect(product.ingredients?.map((i) => [i.input, i.dbName])).toEqual([
+      ['Acetaminophen', 'Acetaminophen'],
+      ['Cetirizine', 'Cetirizine'],
+      ['Dried yeast', null],
+    ]);
+    expect(r.report.overall_risk).toBe('high');
+    // links point at the interacting ingredients and the plain drug
+    expect(Object.keys(r.report.links).sort()).toEqual(['Acetaminophen', 'Warfarin']);
+    // the 'resolved' event is product-level too
+    const resolved = env.events.find((e) => e.type === 'resolved');
+    expect(resolved && resolved.type === 'resolved' && resolved.drugs.map((d) => d.input)).toEqual(['GH Creation EX+', 'Coumadin']);
+  });
+
+  it('works without the model resolving the product, and ignores the names it passes to check_interactions', async () => {
+    const env = await makeAgentEnv();
+    env.setResponses([
+      call('check_interactions', { drugs: ['GH Creation EX+'] }),
+      call('submit_report', draft([])),
+    ]);
+    const r = await env.agent.run({ drugs: [supplement, 'Warfarin'] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.pairs).toHaveLength(1);
+    expect(r.report.pairs[0]).toMatchObject({ status: 'interaction', explanation: expect.stringMatching(/Cơ sở dữ liệu ghi nhận/) });
+  });
+
+  it('no recorded ingredient pair: no_record, with how much could be checked', async () => {
+    const env = await makeAgentEnv();
+    env.setResponses([call('check_interactions', { drugs: [] }), call('submit_report', draft([]))]);
+    const r = await env.agent.run({ drugs: [supplement, 'Digoxin'] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const p = r.report.pairs[0]!;
+    expect(p.status).toBe('no_record');
+    expect(p.ingredient_pairs).toBeUndefined();
+    expect(p.explanation).toMatch(/Đã tra cứu 2 cặp thành phần; chưa tra cứu được: Dried yeast/);
+    expect(r.report.overall_risk).toBe('unknown');
+  });
+
+  it('product with no ingredient matching the database: unresolved pair', async () => {
+    const env = await makeAgentEnv({ resolveMin: 0.99 });
+    env.setResponses([call('check_interactions', { drugs: [] }), call('submit_report', draft([]))]);
+    const r = await env.agent.run({ drugs: [{ name: 'Herbal X', ingredients: ['Foobar root', 'Quux leaf'] }, 'Warfarin'] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.pairs[0]).toMatchObject({ status: 'unresolved' });
+    expect(r.report.drugs[0]).toMatchObject({ input: 'Herbal X', dbName: null, method: 'none' });
+  });
+
+  it('ingredients of the same product are never compared with each other', async () => {
+    const env = await makeAgentEnv();
+    env.setResponses([call('check_interactions', { drugs: [] }), call('submit_report', draft([]))]);
+    // Warfarin + Ibuprofen interact in the DB, but they are two ingredients of ONE product.
+    const r = await env.agent.run({ drugs: [{ name: 'Combo', ingredients: ['Warfarin', 'Ibuprofen'] }, 'Digoxin'] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.pairs).toHaveLength(1);
+    expect(r.report.pairs[0]!.status).toBe('no_record');
+  });
+
+  it('resolves ingredients written the way labels write them to the underlying substance', async () => {
+    const env = await makeAgentEnv();
+    env.setResponses([call('check_interactions', { drugs: [] }), call('submit_report', draft([]))]);
+    const label = { name: 'Blood Support', ingredients: ['Acetaminophen from corn starch', 'Digoxin (from Digitalis lanata)', 'Dried yeast'] };
+    const r = await env.agent.run({ drugs: [label, 'Warfarin'] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // input keeps the label text, dbName is the substance
+    expect(r.report.drugs[0]!.ingredients?.map((i) => [i.input, i.dbName])).toEqual([
+      ['Acetaminophen from corn starch', 'Acetaminophen'],
+      ['Digoxin (from Digitalis lanata)', 'Digoxin'],
+      ['Dried yeast', null],
+    ]);
+    expect(r.report.pairs[0]).toMatchObject({ status: 'interaction' });
+    expect(r.report.pairs[0]!.ingredient_pairs).toEqual([expect.objectContaining({ a: 'Acetaminophen', b: 'Warfarin' })]);
+  });
+});

@@ -7,7 +7,7 @@ import { openDomain } from './domain/open.ts';
 import { link } from './domain/links.ts';
 import type { AppServices } from './http/services.ts';
 import { createOpenAiLlm } from './llm/models.ts';
-import { createOpenAiWebSearch } from './llm/web-search.ts';
+import { createOpenAiSiteSearch, createOpenAiWebSearch } from './llm/web-search.ts';
 import { openAppDb } from './store/app-db.ts';
 import { CabinetStore } from './store/cabinet.ts';
 import { SqlCache } from './store/cache.ts';
@@ -23,7 +23,8 @@ export async function createServices(cfg: Config, log: Logger): Promise<AppServi
   const cache = new SqlCache(appDb);
   cache.purgeExpired();
   const linkCache = cache.linkCache();
-  const linkFn = (name: string) => link(name, { cache: linkCache });
+  const searchSite = createOpenAiSiteSearch({ apiKey: cfg.openaiApiKey, model: cfg.webSearchModel });
+  const linkFn = (name: string) => link(name, { cache: linkCache, searchSite });
 
   const llm = createOpenAiLlm();
   const reasoning = cfg.reasoningEffort;
@@ -33,14 +34,15 @@ export async function createServices(cfg: Config, log: Logger): Promise<AppServi
     llm,
     config: { agentModel: cfg.agentModel, reasoningEffort: reasoning, maxTurns: cfg.maxTurns, queryTimeoutMs: cfg.queryTimeoutMs },
   });
+  const webSearch = createOpenAiWebSearch({ apiKey: cfg.openaiApiKey, model: cfg.webSearchModel });
   const chat = createChatAgent({
     ...deps,
     llm,
     sessions,
-    webSearch: createOpenAiWebSearch({ apiKey: cfg.openaiApiKey, model: cfg.webSearchModel }),
+    webSearch,
     config: { chatModel: cfg.chatModel, reasoningEffort: reasoning, maxTurns: cfg.maxTurns, queryTimeoutMs: cfg.queryTimeoutMs },
   });
-  const extract = createExtractAgent({ llm, model: cfg.extractModel });
+  const extract = createExtractAgent({ llm, model: cfg.extractModel, webSearch, reasoningEffort: reasoning, maxTurns: cfg.maxTurns });
   return {
     log,
     corsOrigins: cfg.corsOrigins,

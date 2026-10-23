@@ -26,7 +26,12 @@ export interface StatsResponse {
 }
 
 export interface DrugNamesFromImageResponse {
+  /** Flat ingredient names (kept for older clients). */
   result: string[];
+  /** The one product on the packaging, when its name is legible. */
+  product_name?: string | null;
+  ingredients?: { name: string; strength?: string }[];
+  evidences?: { url: string; title: string; query: string }[];
   timestamp: string;
 }
 
@@ -185,10 +190,13 @@ async function readSSE(body: ReadableStream<Uint8Array>, onEvent: (event: string
   }
 }
 
+/** A drug name, or a product (e.g. a supplement read from a photo) whose ingredients are checked as one drug. */
+export type DrugInput = string | { name: string; ingredients: string[] };
+
 export const v2API = {
   /** Runs the interaction agent and streams progress; resolves with the final report. */
   checkInteractions: async (
-    drugs: string[],
+    drugs: DrugInput[],
     onProgress: (e: ProgressEvent) => void,
     signal?: AbortSignal,
   ): Promise<InteractionReport> => {

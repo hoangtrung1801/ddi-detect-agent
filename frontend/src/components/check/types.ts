@@ -1,4 +1,4 @@
-import type { PairKind, PairStatus, Severity } from "@/lib/report";
+import type { IngredientPair, PairKind, PairStatus, Severity } from "@/lib/report";
 
 /** A pair as the results UI shows it: a finished report pair, or a live one still waiting for the report. */
 export interface DisplayPair {
@@ -10,6 +10,8 @@ export interface DisplayPair {
   kind: PairKind;
   explanation?: string;
   dbCondition?: string;
+  /** Interacting ingredient pairs when a drug is a multi-ingredient product. */
+  ingredientPairs?: IngredientPair[];
   /** True while the run is still going and severity/explanation are not known yet. */
   pending: boolean;
 }

@@ -17,6 +17,8 @@ export interface ResolvedDrug {
   confidence: number;
   method: ResolveMethod;
   alternatives: Alternative[];
+  /** Only on a multi-ingredient product: how each of its ingredients resolved. */
+  ingredients?: ResolvedDrug[];
 }
 
 export interface VectorIndex {
@@ -46,6 +48,22 @@ export function cleanName(s: string): string {
       .replace(/\b(tablets?|capsules?|viên|nén|hộp|syrup|sirô|injection)\b/gi, ' ')
       .replace(/[^\p{L}\p{N}\s\-+]/gu, ' '),
   );
+}
+
+/**
+ * Candidate substance names for an ingredient written the way labels write it, most specific first, raw text last:
+ * "Calcium (from calcium carbonate)" -> ["calcium carbonate", "Calcium", raw]; "Ibuprofen from corn starch" -> ["Ibuprofen", raw].
+ */
+export function ingredientVariants(raw: string): string[] {
+  const text = raw.trim();
+  const out: string[] = [];
+  const source = /\(\s*(?:from|as|derived from|source:?)\s+([^)]+)\)/i.exec(text)?.[1];
+  if (source) out.push(source.trim());
+  const withoutParens = text.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+  const withoutSource = withoutParens.replace(/\s+(?:from|derived from|as)\s+.*$/i, '').trim();
+  out.push(withoutSource, withoutParens, text);
+  const seen = new Set<string>();
+  return out.filter((v) => v && !seen.has(v.toLowerCase()) && seen.add(v.toLowerCase()));
 }
 
 export class Resolver {

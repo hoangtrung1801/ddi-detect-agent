@@ -12,9 +12,14 @@ const Params = Type.Object({
 });
 
 export function formatPair(p: PairResult): string {
-  if (p.status === 'interaction') return `INTERACTION  ${p.a} + ${p.b}: ${p.condition}`;
-  if (p.status === 'no_record') return `NO_RECORD  ${p.a} + ${p.b}: no interaction is recorded in the database (this does not prove it is safe)`;
-  return `UNRESOLVED  ${p.a} + ${p.b}: at least one drug could not be matched to the database, so this pair was not checked`;
+  const note = p.checked === undefined ? '' : ` [${p.checked} ingredient pairs checked${p.unmatched?.length ? `; no database match for: ${p.unmatched.join(', ')}` : ''}]`;
+  if (p.status === 'interaction') {
+    return p.ingredientPairs
+      ? `INTERACTION  ${p.a} + ${p.b}${note}:\n${p.ingredientPairs.map((i) => `  - ${i.a} + ${i.b}: ${i.condition}`).join('\n')}`
+      : `INTERACTION  ${p.a} + ${p.b}: ${p.condition}`;
+  }
+  if (p.status === 'no_record') return `NO_RECORD  ${p.a} + ${p.b}${note}: no interaction is recorded in the database (this does not prove it is safe)`;
+  return `UNRESOLVED  ${p.a} + ${p.b}${note}: at least one drug could not be matched to the database, so this pair was not checked`;
 }
 
 export function makeCheckInteractionsTool(ctx: RunContext): AgentTool<typeof Params> {
@@ -26,7 +31,9 @@ export function makeCheckInteractionsTool(ctx: RunContext): AgentTool<typeof Par
     parameters: Params,
     execute: async (_id, params) => {
       const unknown: string[] = [];
-      for (const name of params.drugs) {
+      // With multi-ingredient products the pairs come from the request, not from the names the model passes.
+      if (ctx.grouped) await ctx.resolveMembers();
+      for (const name of ctx.grouped ? [] : params.drugs) {
         const d = ctx.deps.drugDb.getDrug(name);
         if (!d) {
           unknown.push(name);

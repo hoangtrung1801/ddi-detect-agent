@@ -1,9 +1,9 @@
 import type { Llm } from '../llm/models.ts';
 import type { InteractionReport } from '../schemas/report.ts';
 import type { ErrorCode } from '../schemas/api.ts';
-import { RunContext, type AgentDeps } from './context.ts';
+import { RunContext, type AgentDeps, type Product } from './context.ts';
 import { makeBeforeToolCall } from './guard.ts';
-import { DDI_SYSTEM_PROMPT } from './prompts.ts';
+import { DDI_PRODUCTS_ADDENDUM, DDI_SYSTEM_PROMPT } from './prompts.ts';
 import type { ProgressSink } from './progress.ts';
 import { runAgent, type RunStats, type ThinkingLevel } from './run.ts';
 import { makeCheckInteractionsTool } from './tools/check-interactions.ts';
@@ -30,22 +30,32 @@ export type DdiResult =
 export interface DdiInput {
   /** Free-text question (any language). */
   text?: string;
-  /** Explicit list of drug names. */
-  drugs?: string[];
+  /** Explicit drugs: a name, or a product with the ingredients read from its packaging (checked as ONE drug). */
+  drugs?: (string | { name: string; ingredients?: string[] | undefined })[];
+}
+
+function toProducts(drugs: NonNullable<DdiInput['drugs']>): Product[] {
+  return drugs.map((d) => (typeof d === 'string' ? { name: d, ingredients: [] } : { name: d.name, ingredients: d.ingredients ?? [] }));
 }
 
 export function createDdiAgent(deps: AgentDeps & { llm: Llm; config: DdiAgentConfig }) {
   return {
     async run(input: DdiInput, opts: { sink?: ProgressSink; signal?: AbortSignal } = {}): Promise<DdiResult> {
-      const ctx = new RunContext(deps, opts.sink);
-      const prompt = input.drugs?.length
-        ? `Kiểm tra tương tác giữa các thuốc sau: ${input.drugs.join('; ')}`
-        : (input.text ?? '');
+      const products = input.drugs?.length ? toProducts(input.drugs) : [];
+      const ctx = new RunContext(deps, opts.sink, products);
+      const prompt = ctx.grouped
+        ? `Kiểm tra tương tác giữa các thuốc sau. Mỗi mục là MỘT thuốc, kể cả khi gồm nhiều thành phần:\n` +
+          products
+            .map((p, i) => `${i + 1}. ${p.name}${p.ingredients.length ? ` (thành phần: ${p.ingredients.join('; ')})` : ''}`)
+            .join('\n')
+        : products.length
+          ? `Kiểm tra tương tác giữa các thuốc sau: ${products.map((p) => p.name).join('; ')}`
+          : (input.text ?? '');
       const out = await runAgent(
         {
           llm: deps.llm,
           modelId: deps.config.agentModel,
-          systemPrompt: DDI_SYSTEM_PROMPT,
+          systemPrompt: ctx.grouped ? DDI_SYSTEM_PROMPT + DDI_PRODUCTS_ADDENDUM : DDI_SYSTEM_PROMPT,
           tools: [makeResolveDrugsTool(ctx), makeCheckInteractionsTool(ctx), makeDrugLinksTool(ctx), makeSubmitReportTool(ctx)],
           thinking: deps.config.reasoningEffort,
           maxTurns: deps.config.maxTurns,

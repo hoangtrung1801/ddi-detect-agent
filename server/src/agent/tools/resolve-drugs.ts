@@ -1,5 +1,6 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
+import { normName } from '../../util/norm.ts';
 import type { RunContext } from '../context.ts';
 
 const Params = Type.Object({
@@ -23,8 +24,26 @@ export function makeResolveDrugsTool(ctx: RunContext): AgentTool<typeof Params> 
       'Provide generic_guess whenever the input is a brand name, abbreviation, misspelling or non-English name.',
     parameters: Params,
     execute: async (_id, params) => {
-      const resolved = await Promise.all(params.drugs.map((d) => ctx.deps.resolver.resolve(d.input, d.generic_guess)));
+      // Multi-ingredient products are resolved ingredient by ingredient from the request itself.
+      const productNames = new Set(ctx.products.filter((p) => p.ingredients.length).map((p) => normName(p.name)));
+      const plain = params.drugs.filter((d) => !productNames.has(normName(d.input)));
+      const resolved = await Promise.all(plain.map((d) => ctx.deps.resolver.resolve(d.input, d.generic_guess)));
       resolved.forEach((r) => ctx.addResolved(r));
+      if (ctx.grouped) {
+        await ctx.resolveMembers();
+        const drugs = ctx.drugs;
+        ctx.emit({ type: 'resolved', drugs });
+        const lines = drugs.map((d, i) => {
+          if (!d.ingredients) return d.dbName ? `${i + 1}. "${d.input}" -> ${d.dbName} (${d.method}, confidence ${d.confidence})` : `${i + 1}. "${d.input}" -> UNRESOLVED`;
+          const hit = d.ingredients.filter((m) => m.dbName).map((m) => `${m.input} -> ${m.dbName}`);
+          const miss = d.ingredients.filter((m) => !m.dbName).map((m) => m.input);
+          return (
+            `${i + 1}. "${d.input}" is ONE product with ${d.ingredients.length} ingredients. ` +
+            `Matched in the database: ${hit.join('; ') || 'none'}. Not matched: ${miss.join('; ') || 'none'}.`
+          );
+        });
+        return { content: [{ type: 'text', text: lines.join('\n') }], details: drugs };
+      }
       ctx.emit({ type: 'resolved', drugs: resolved });
       const lines = resolved.map((r, i) =>
         r.dbName

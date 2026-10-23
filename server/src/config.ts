@@ -45,7 +45,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     openaiApiKey: env.OPENAI_API_KEY ?? '',
     agentModel: env.AGENT_MODEL ?? 'gpt-5.4-mini',
     chatModel: env.CHAT_MODEL ?? 'gpt-5.4-mini',
-    extractModel: env.EXTRACT_MODEL ?? 'gpt-5.4-mini',
+    extractModel: env.EXTRACT_MODEL ?? 'gpt-6-luna',
     webSearchModel: env.WEB_SEARCH_MODEL ?? 'gpt-5.4-mini',
     reasoningEffort: env.REASONING_EFFORT ?? 'low',
     port: num(env.PORT, 8000),

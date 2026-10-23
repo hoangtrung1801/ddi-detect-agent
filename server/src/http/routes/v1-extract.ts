@@ -11,8 +11,9 @@ export function v1ExtractRoutes(s: AppServices): Hono {
   const run = async (load: () => Promise<ImageData>, signal: AbortSignal) => {
     try {
       const image = await load();
-      const { names } = await s.extract.extract(image, signal);
-      return { ok: true as const, body: { result: names, timestamp: nowIso() } };
+      const { product, names, ingredients, evidences } = await s.extract.extract(image, signal);
+      // `result` stays the flat ingredient-name list for v1 clients; `product_name` + `ingredients` describe the one product on the image.
+      return { ok: true as const, body: { result: names, product_name: product, ingredients, evidences, timestamp: nowIso() } };
     } catch (e) {
       if (e instanceof ImageError) return { ok: false as const, status: e.status as 400 | 413, detail: e.message };
       s.log.error({ err: e instanceof Error ? e.message : String(e) }, 'drug name extraction failed');

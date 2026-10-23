@@ -13,6 +13,8 @@ export interface DrugEntry {
   name: string;
   /** File name of the photo the name was read from, if any. */
   source?: string;
+  /** Ingredients read from a packaging photo: the entry is then ONE product made of these. */
+  ingredients?: string[];
 }
 
 export interface PhotoEntry {
@@ -20,6 +22,8 @@ export interface PhotoEntry {
   file: File;
   preview: string;
   status: "loading" | "done" | "error";
+  /** Product name read from the photo, if legible. */
+  product?: string;
   names: string[];
 }
 
@@ -130,7 +134,12 @@ export const DrugComposer = forwardRef<HTMLInputElement, DrugComposerProps>(func
                       Đang đọc tên thuốc…
                     </span>
                   )}
-                  {p.status === "done" && (p.names.length ? `Đọc được: ${p.names.join(", ")}` : "Không đọc được tên thuốc nào")}
+                  {p.status === "done" &&
+                    (p.names.length > 1
+                      ? `Đọc được: ${p.product ?? "1 sản phẩm"} · ${p.names.length} thành phần`
+                      : p.names.length
+                        ? `Đọc được: ${p.names[0]}`
+                        : "Không đọc được tên thuốc nào")}
                   {p.status === "error" && <span className="text-sev-major">Không đọc được ảnh</span>}
                 </div>
               </div>
@@ -163,6 +172,9 @@ export const DrugComposer = forwardRef<HTMLInputElement, DrugComposerProps>(func
             {drugs.map((d) => {
               const r = statusOf(d);
               const unknown = r && !r.dbName;
+              // A multi-ingredient product is identified by its ingredients: show how many matched.
+              const matchedIngredients = r?.ingredients?.filter((i) => i.dbName).length;
+              const ingredientTotal = r?.ingredients?.length;
               const renamed = r?.dbName && norm(r.dbName) !== norm(d.name);
               return (
                 <li
@@ -174,12 +186,40 @@ export const DrugComposer = forwardRef<HTMLInputElement, DrugComposerProps>(func
                 >
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold break-words">{renamed ? r.dbName : d.name}</div>
-                    {(renamed || d.source || unknown) && (
+                    {(renamed || d.source || unknown || d.ingredients?.length) && (
                       <div className="text-xs text-muted-foreground">
-                        {[renamed && `Bạn nhập “${d.name}”`, d.source && `từ ảnh ${d.source}`, unknown && "Không khớp hoạt chất nào"]
+                        {[
+                          renamed && `Bạn nhập “${d.name}”`,
+                          d.ingredients?.length && `${d.ingredients.length} thành phần`,
+                          d.source && `từ ảnh ${d.source}`,
+                          unknown && (d.ingredients?.length ? "Không khớp thành phần nào" : "Không khớp hoạt chất nào"),
+                        ]
                           .filter(Boolean)
                           .join(" · ")}
                       </div>
+                    )}
+                    {d.ingredients && d.ingredients.length > 0 && (
+                      <details className="text-xs text-muted-foreground">
+                        <summary className="cursor-pointer py-1 select-none">Xem thành phần</summary>
+                        <ul className="flex flex-wrap gap-1 pb-1">
+                          {d.ingredients.map((name) => {
+                            const m = r?.ingredients?.find((i) => norm(i.input) === norm(name));
+                            const missing = m && !m.dbName;
+                            return (
+                              <li
+                                key={name}
+                                className={cn(
+                                  "rounded-full px-2 py-0.5",
+                                  missing ? "border border-dashed border-neutral-line" : "bg-brand-soft text-brand-ink",
+                                )}
+                                title={missing ? "Chưa có trong cơ sở dữ liệu tương tác" : m?.dbName ? `Khớp: ${m.dbName}` : undefined}
+                              >
+                                {m?.dbName && norm(m.dbName) !== norm(name) ? `${name} → ${m.dbName}` : name}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </details>
                     )}
                   </div>
                   {r && (
@@ -189,7 +229,11 @@ export const DrugComposer = forwardRef<HTMLInputElement, DrugComposerProps>(func
                         unknown ? "bg-neutral-soft text-neutral-ink" : "bg-brand-soft text-brand-ink",
                       )}
                     >
-                      {unknown ? "Không xác định" : "Đã nhận diện"}
+                      {unknown
+                        ? "Không xác định"
+                        : ingredientTotal
+                          ? `Nhận diện ${matchedIngredients}/${ingredientTotal} thành phần`
+                          : "Đã nhận diện"}
                     </span>
                   )}
                   <Button variant="ghost" size="icon-lg" className="size-11 shrink-0" onClick={() => onRemoveDrug(d.id)} aria-label={`Xoá ${d.name}`}>

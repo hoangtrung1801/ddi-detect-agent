@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ingredientVariants } from '../../src/domain/resolver.ts';
 import { makeDomain } from '../helpers/domain.ts';
 
 describe('Resolver', () => {
@@ -56,5 +57,14 @@ describe('Resolver', () => {
     const a = await resolver.resolve('warfarin');
     a.dbName = 'mutated';
     expect((await resolver.resolve('warfarin')).dbName).toBe('Warfarin');
+  });
+});
+
+describe('ingredientVariants', () => {
+  it('puts the substance hidden in label phrasing first and the raw text last', () => {
+    expect(ingredientVariants('Calcium (from calcium carbonate)')).toEqual(['calcium carbonate', 'Calcium', 'Calcium (from calcium carbonate)']);
+    expect(ingredientVariants('Calcium carbonate from oyster shells')).toEqual(['Calcium carbonate', 'Calcium carbonate from oyster shells']);
+    expect(ingredientVariants('Ibuprofen')).toEqual(['Ibuprofen']);
+    expect(ingredientVariants('Vitamin D3 (as cholecalciferol)')[0]).toBe('cholecalciferol');
   });
 });

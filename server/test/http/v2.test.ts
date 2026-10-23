@@ -35,6 +35,20 @@ describe('v2', () => {
     expect(body.overall_risk).toBe('high');
   });
 
+  it('accepts a product with ingredients next to a plain drug name', async () => {
+    const env = await makeHttpEnv();
+    env.setResponses([call('check_interactions', { drugs: [] }), call('submit_report', draft([{ a: 'Supp', b: 'Warfarin', severity: 'moderate', explanation: 'x' }]))]);
+    const res = await env.json('/v2/interactions', 'POST', { drugs: [{ name: 'Supp', ingredients: ['Ibuprofen', 'Dried yeast'] }, 'Warfarin'] });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Value.Check(InteractionReportSchema, body)).toBe(true);
+    expect(body.pairs).toHaveLength(1);
+    expect(body.pairs[0]).toMatchObject({ a: 'Supp', b: 'Warfarin', status: 'interaction' });
+    expect(body.pairs[0].ingredient_pairs).toHaveLength(1);
+    const bad = await env.json('/v2/interactions', 'POST', { drugs: [{ name: 'Supp', ingredients: [''] }, 'Warfarin'] });
+    expect(bad.status).toBe(400);
+  });
+
   it('accepts { text }', async () => {
     const env = await makeHttpEnv();
     happy(env);

@@ -9,10 +9,15 @@ import { collectLinks } from './tools/drug-links.ts';
 const SAFE_CLAIM = /an toàn|không (có )?tương tác|không gây tương tác|không có nguy cơ|safe/i;
 
 function fixedExplanation(p: PairResult): string {
+  // Product pairs: say how much of the product could actually be checked.
+  const scope =
+    p.checked === undefined
+      ? ''
+      : ` Đã tra cứu ${p.checked} cặp thành phần${p.unmatched?.length ? `; chưa tra cứu được: ${p.unmatched.join(', ')}` : ''}.`;
   if (p.status === 'unresolved') {
-    return `Không xác định: ít nhất một trong hai thuốc (${p.a}, ${p.b}) không khớp được với cơ sở dữ liệu nên chưa kiểm tra được cặp này. Hãy kiểm tra lại tên thuốc hoặc hỏi dược sĩ.`;
+    return `Không xác định: ít nhất một trong hai thuốc (${p.a}, ${p.b}) không khớp được với cơ sở dữ liệu nên chưa kiểm tra được cặp này.${scope} Hãy kiểm tra lại tên thuốc hoặc hỏi dược sĩ.`;
   }
-  return `Không có dữ liệu: cơ sở dữ liệu không ghi nhận tương tác giữa ${p.a} và ${p.b}. Điều này không đồng nghĩa với an toàn; hãy hỏi bác sĩ hoặc dược sĩ.`;
+  return `Không có dữ liệu: cơ sở dữ liệu không ghi nhận tương tác giữa ${p.a} và ${p.b}.${scope} Điều này không đồng nghĩa với an toàn; hãy hỏi bác sĩ hoặc dược sĩ.`;
 }
 
 /** Blocks submit_report until check_interactions has produced pair results for this request. */
@@ -53,6 +58,7 @@ export async function buildReport(draft: ReportDraft, ctx: RunContext): Promise<
       const out: ReportPair = {
         ...base,
         db_condition: r.condition ?? '',
+        ...(r.ingredientPairs?.length ? { ingredient_pairs: r.ingredientPairs.map(({ a, b, condition }) => ({ a, b, condition })) } : {}),
         explanation: d?.explanation?.trim() || `Cơ sở dữ liệu ghi nhận: ${r.condition}`,
       };
       if (d?.severity) out.severity = d.severity as Severity;
@@ -66,7 +72,15 @@ export async function buildReport(draft: ReportDraft, ctx: RunContext): Promise<
     return { ...base, explanation };
   });
 
-  const resolvedNames = drugs.filter((d) => d.dbName).map((d) => d.dbName!);
+  // Products have no database page of their own: link their interacting ingredients instead.
+  const resolvedNames = ctx.grouped
+    ? [
+        ...new Set([
+          ...drugs.filter((d) => !d.ingredients && d.dbName).map((d) => d.dbName!),
+          ...ctx.pairs.flatMap((p) => (p.ingredientPairs ?? []).flatMap((i) => [i.a, i.b])),
+        ]),
+      ]
+    : drugs.filter((d) => d.dbName).map((d) => d.dbName!);
   await collectLinks(ctx, resolvedNames);
   const links: InteractionReport['links'] = {};
   for (const n of resolvedNames) if (ctx.links[n]) links[n] = ctx.links[n]!;

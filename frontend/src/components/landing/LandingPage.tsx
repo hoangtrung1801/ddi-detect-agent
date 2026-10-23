@@ -24,7 +24,7 @@ const SEVERITY_ROWS = [
 const FAQ = [
   {
     q: "Dữ liệu tương tác lấy từ đâu?",
-    a: "Từ [NGUỒN DỮ LIỆU TƯƠNG TÁC]. AI chỉ diễn giải những gì có trong dữ liệu, và mỗi thuốc có liên kết Drugs.com để bạn tự đối chiếu.",
+    a: "Từ [NGUỒN DỮ LIỆU TƯƠNG TÁC]. AI chỉ diễn giải những gì có trong dữ liệu, và mỗi thuốc có liên kết tham khảo (ưu tiên Nhà thuốc Long Châu, sau đó Drugs.com) để bạn tự đối chiếu.",
   },
   { q: "“Chưa có dữ liệu” có nghĩa là an toàn?", a: "Không. Nó chỉ có nghĩa là cơ sở dữ liệu chưa ghi nhận cặp đó. Hãy hỏi dược sĩ nếu bạn còn lo lắng." },
   { q: "Tôi có cần tạo tài khoản?", a: "Không cần để kiểm tra. Tài khoản chỉ dùng để lưu tủ thuốc và lịch sử kiểm tra." },

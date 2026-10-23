@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { drugInteractionAPI } from "@/lib/api";
+import { drugInteractionAPI, type DrugInput } from "@/lib/api";
 import useAuthStore from "@/stores/use-auth-store";
 import { DrugComposer, MAX_DRUGS, type DrugEntry, type PhotoEntry } from "@/components/check/DrugComposer";
 import { AnalysisProgress } from "@/components/check/AnalysisProgress";
@@ -27,8 +27,9 @@ export function InteractionCheckPage({ initialDrugs, onRequireLogin }: Interacti
   const { isAuthenticated, addInteractionCheck, addToMedicineCabinet } = useAuthStore();
 
   const runCheck = useCallback(
-    async (names: string[]) => {
-      const report = await run(names);
+    async (inputs: DrugInput[]) => {
+      const report = await run(inputs);
+      const names = inputs.map((d) => (typeof d === "string" ? d : d.name));
       if (report && useAuthStore.getState().isAuthenticated) addInteractionCheck(names, report);
     },
     [run, addInteractionCheck],
@@ -52,17 +53,25 @@ export function InteractionCheckPage({ initialDrugs, onRequireLogin }: Interacti
     if (check.report || check.error || check.running) reset();
   };
 
-  const addDrug = (name: string, source?: string) =>
+  const addDrug = (name: string, source?: string, ingredients?: string[]) =>
     changeDrugs((prev) =>
-      prev.length >= MAX_DRUGS || prev.some((d) => norm(d.name) === norm(name)) ? prev : [...prev, { id: newId(), name, source }],
+      prev.length >= MAX_DRUGS || prev.some((d) => norm(d.name) === norm(name))
+        ? prev
+        : [...prev, { id: newId(), name, source, ...(ingredients?.length ? { ingredients } : {}) }],
     );
 
   const readPhoto = async (photo: PhotoEntry) => {
     setPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, status: "loading" } : p)));
     try {
       const res = await drugInteractionAPI.extractDrugNamesFromImage(photo.file);
-      setPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, status: "done", names: res.result } : p)));
-      for (const name of res.result) addDrug(name, photo.file.name);
+      const product = res.product_name?.trim() || undefined;
+      setPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, status: "done", names: res.result, product } : p)));
+      if (res.result.length > 1) {
+        // One packaging photo is ONE drug made of several ingredients.
+        addDrug(product ?? photo.file.name.replace(/\.[^.]+$/, ""), photo.file.name, res.result);
+      } else {
+        for (const name of res.result) addDrug(name, photo.file.name);
+      }
     } catch {
       setPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, status: "error" } : p)));
     }
@@ -137,7 +146,7 @@ export function InteractionCheckPage({ initialDrugs, onRequireLogin }: Interacti
             const p = photos.find((x) => x.id === id);
             if (p) void readPhoto(p);
           }}
-          onCheck={() => void runCheck(drugs.map((d) => d.name))}
+          onCheck={() => void runCheck(drugs.map((d) => (d.ingredients?.length ? { name: d.name, ingredients: d.ingredients } : d.name)))}
         />
         {(check.running || check.report) && (
           <AnalysisProgress steps={check.steps} running={check.running} resolved={resolved} pairs={check.report?.pairs ?? check.livePairs} />

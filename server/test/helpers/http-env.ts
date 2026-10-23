@@ -24,17 +24,18 @@ export async function makeHttpEnv(over: { searchResult?: string; queryTimeoutMs?
   const base = { drugDb: dom.drugDb, resolver: dom.resolver, linkFn };
   const cfg = { reasoningEffort: 'off' as const, maxTurns: 6, queryTimeoutMs: over.queryTimeoutMs ?? 5000 };
   const ddi = createDdiAgent({ ...base, llm: f.llm, config: { agentModel: 'faux-1', ...cfg } });
+  const webSearch = async (q: string) => {
+    searches.push(q);
+    return { text: over.searchResult ?? 'Kết quả tìm kiếm giả.', sources: [{ url: 'https://example.org/a', title: 'A' }] };
+  };
   const chat = createChatAgent({
     ...base,
     llm: f.llm,
     sessions,
-    webSearch: async (q) => {
-      searches.push(q);
-      return { text: over.searchResult ?? 'Kết quả tìm kiếm giả.', sources: [{ url: 'https://example.org/a', title: 'A' }] };
-    },
+    webSearch,
     config: { chatModel: 'faux-1', ...cfg },
   });
-  const extract = createExtractAgent({ llm: f.llm, model: 'faux-1' });
+  const extract = createExtractAgent({ llm: f.llm, model: 'faux-1', webSearch });
   const services = {
     log: pino({ level: 'silent' }),
     corsOrigins: ['http://localhost:5173'],

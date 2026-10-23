@@ -1,14 +1,14 @@
 import { ArrowRight, ChevronLeft, ChevronRight, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { KIND_META } from "@/lib/report";
+import { KIND_META, linkPriority, linkSourceLabel, type LinkInfo } from "@/lib/report";
 import type { DisplayPair } from "./types";
 
 interface PairDetailProps {
   pair: DisplayPair;
   index: number;
   total: number;
-  links: Record<string, { url: string; verified: boolean }>;
+  links: Record<string, LinkInfo>;
   onPrev: () => void;
   onNext: () => void;
   onFixDrug?: () => void;
@@ -26,7 +26,11 @@ function splitExplanation(p: DisplayPair): { headline: string; rest: string } {
 export function PairDetail({ pair, index, total, links, onPrev, onNext, onFixDrug }: PairDetailProps) {
   const meta = KIND_META[pair.kind];
   const pendingInteraction = pair.pending && pair.status === "interaction";
-  const sources = [pair.a, pair.b].filter((d) => links[d]);
+  const ingredientPairs = pair.ingredientPairs ?? [];
+  // Links are keyed by database name: the drugs themselves, or the interacting ingredients of a product.
+  const sources = [...new Set([pair.a, pair.b, ...ingredientPairs.flatMap((i) => [i.a, i.b])])]
+    .filter((d) => links[d])
+    .sort((x, y) => linkPriority(links[x]!) - linkPriority(links[y]!));
   const { headline, rest } = splitExplanation(pair);
 
   return (
@@ -90,7 +94,24 @@ export function PairDetail({ pair, index, total, links, onPrev, onNext, onFixDru
           Không có dữ liệu không có nghĩa là an toàn — hãy hỏi dược sĩ nếu dùng chung lâu ngày.
         </p>
       )}
-      {pair.dbCondition && (
+      {ingredientPairs.length > 0 && !pair.pending && (
+        <div className="flex max-w-[72ch] flex-col gap-1.5">
+          <div className="text-xs font-semibold text-neutral-ink">Thành phần liên quan ({ingredientPairs.length})</div>
+          <ul className="flex flex-col gap-1.5">
+            {ingredientPairs.map((i) => (
+              <li key={`${i.a}|${i.b}`} className="rounded-lg border bg-card px-3 py-2 text-sm">
+                <span className="font-semibold">
+                  {i.a} + {i.b}
+                </span>
+                <span lang="en" className="block text-xs text-muted-foreground">
+                  {i.condition}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {pair.dbCondition && ingredientPairs.length === 0 && (
         <p className="max-w-[72ch] text-xs text-muted-foreground">
           <span className="font-semibold">Mô tả gốc trong cơ sở dữ liệu:</span> <span lang="en">{pair.dbCondition}</span>
         </p>
@@ -100,6 +121,7 @@ export function PairDetail({ pair, index, total, links, onPrev, onNext, onFixDru
         {sources.map((d) => (
           <a key={d} href={links[d]!.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
             Thông tin về {d}
+            <span className="font-normal text-muted-foreground">· {linkSourceLabel(links[d]!)}</span>
             <ExternalLink className="size-3.5" aria-hidden="true" />
           </a>
         ))}

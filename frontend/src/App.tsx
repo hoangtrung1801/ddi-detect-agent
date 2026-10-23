@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { InteractionCheckPage } from "@/components/InteractionCheckPage";
 import { PatientProfile } from "@/components/PatientProfile";
 import { LoginDialog } from "@/components/LoginDialog";
@@ -7,10 +7,16 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import useAuthStore from "@/stores/use-auth-store";
 
-type Page = "home" | "interaction" | "cabinet";
+// three.js is large: load the graph page only when it is opened.
+const InteractionGraphPage = lazy(() =>
+  import("@/components/graph/InteractionGraphPage").then((m) => ({ default: m.InteractionGraphPage })),
+);
+
+type Page = "home" | "interaction" | "graph" | "cabinet";
 
 const NAV: { id: Page; label: string }[] = [
   { id: "interaction", label: "Kiểm tra tương tác" },
+  { id: "graph", label: "Đồ thị 3D" },
   { id: "cabinet", label: "Tủ thuốc" },
 ];
 
@@ -95,6 +101,10 @@ function App() {
           <LandingPage logo={home} account={account} onStart={checkDrugs} onOpenCheck={() => go("interaction")} />
         ) : page === "interaction" ? (
           <InteractionCheckPage key={prefill?.run ?? 0} initialDrugs={prefill?.drugs} onRequireLogin={() => setIsLoginOpen(true)} />
+        ) : page === "graph" ? (
+          <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Đang tải đồ thị…</div>}>
+            <InteractionGraphPage onCheckDrugs={checkDrugs} />
+          </Suspense>
         ) : (
           <PatientProfile onCheckDrugs={checkDrugs} onRequireLogin={() => setIsLoginOpen(true)} />
         )}

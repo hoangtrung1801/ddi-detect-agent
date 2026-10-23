@@ -20,6 +20,8 @@ export class DrugDb {
   readonly #byId = new Map<number, Drug>();
   readonly #pairStmt;
   readonly #countStmt;
+  /** Neighbour ids per drug id, built on first graph query. */
+  #adj: Map<number, number[]> | null = null;
 
   constructor(db: Database) {
     this.#db = db;
@@ -52,6 +54,54 @@ export class DrugDb {
     const row = this.#pairStmt.get(lo, hi) as { src_a: number; condition: string } | undefined;
     if (!row) return null;
     return { condition: row.condition, firstNamed: this.#byId.get(row.src_a)?.name ?? a.name };
+  }
+
+  /** Number of drugs each drug interacts with. */
+  degree(d: Drug): number {
+    return this.#adjacency().get(d.id)?.length ?? 0;
+  }
+
+  /** Drugs that interact with `d`, most-connected first. */
+  neighbors(d: Drug, limit: number): Drug[] {
+    const ids = this.#adjacency().get(d.id) ?? [];
+    return this.#byDegree(ids).slice(0, limit);
+  }
+
+  /** The most-connected drugs in the database. */
+  hubs(limit: number): Drug[] {
+    return this.#byDegree([...this.#adjacency().keys()]).slice(0, limit);
+  }
+
+  /** Case-insensitive substring search over drug names; prefix matches first. */
+  search(q: string, limit: number): Drug[] {
+    const k = normName(q);
+    if (!k) return [];
+    const hits = [...this.#byId.values()].filter((d) => d.nameNorm.includes(k));
+    hits.sort((x, y) => Number(!x.nameNorm.startsWith(k)) - Number(!y.nameNorm.startsWith(k)) || x.name.length - y.name.length);
+    return hits.slice(0, limit);
+  }
+
+  #byDegree(ids: number[]): Drug[] {
+    const adj = this.#adjacency();
+    return ids
+      .map((id) => this.#byId.get(id)!)
+      .sort((x, y) => (adj.get(y.id)?.length ?? 0) - (adj.get(x.id)?.length ?? 0) || x.name.localeCompare(y.name));
+  }
+
+  #adjacency(): Map<number, number[]> {
+    if (this.#adj) return this.#adj;
+    const adj = new Map<number, number[]>();
+    const push = (k: number, v: number) => {
+      const l = adj.get(k);
+      if (l) l.push(v);
+      else adj.set(k, [v]);
+    };
+    for (const r of this.#db.prepare('SELECT a, b FROM interactions').iterate() as Iterable<{ a: number; b: number }>) {
+      push(r.a, r.b);
+      push(r.b, r.a);
+    }
+    this.#adj = adj;
+    return adj;
   }
 
   stats(): { drugs: number; interactions: number } {

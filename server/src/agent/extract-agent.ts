@@ -9,11 +9,15 @@ import { EXTRACT_INSTRUCTIONS } from './prompts.ts';
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
+// reasoning_steps comes first so the model writes its evidence before the conclusions.
 const IngredientsParams = Type.Object({
+  reasoning_steps: Type.Optional(
+    Type.Array(Type.String(), { description: 'Step-by-step evidence from the image for each ingredient kept or discarded' }),
+  ),
   active_ingredients: Type.Array(
     Type.Object({
       name: Type.String({ description: 'Active ingredient, English generic name' }),
-      strength: Type.Optional(Type.String({ description: 'Strength if visible, e.g. 500 mg' })),
+      strength: Type.Optional(Type.String({ description: 'Strength, e.g. 500 mg, or [unclear]' })),
     }),
   ),
 });
@@ -98,7 +102,10 @@ export function createExtractAgent(deps: { llm: Llm; model: string; timeoutMs?: 
   assertVisionModel(model);
   return {
     /** One model call (no loop). Returns ingredient names in label order, de-duplicated. */
-    async extract(image: ImageData, signal?: AbortSignal): Promise<{ names: string[]; ingredients: Ingredients['active_ingredients'] }> {
+    async extract(
+      image: ImageData,
+      signal?: AbortSignal,
+    ): Promise<{ names: string[]; ingredients: Ingredients['active_ingredients']; reasoning: string[] }> {
       const timeout = AbortSignal.timeout(deps.timeoutMs ?? 60_000);
       const msg: AssistantMessage = await deps.llm.models.complete(
         model,
@@ -128,12 +135,12 @@ export function createExtractAgent(deps: { llm: Llm; model: string; timeoutMs?: 
       const names: string[] = [];
       for (const i of args.active_ingredients) {
         const n = i.name.trim();
-        if (n && !seen.has(n.toLowerCase())) {
+        if (n && !/^\[?unclear\]?$/i.test(n) && !seen.has(n.toLowerCase())) {
           seen.add(n.toLowerCase());
           names.push(n);
         }
       }
-      return { names, ingredients: args.active_ingredients };
+      return { names, ingredients: args.active_ingredients, reasoning: args.reasoning_steps ?? [] };
     },
   };
 }

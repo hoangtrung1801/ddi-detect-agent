@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { v2API } from "@/lib/api";
+import { v2API, type DrugInput } from "@/lib/api";
 import {
   drugLabel,
   pairId,
@@ -64,7 +64,7 @@ export function useInteractionCheck() {
   const [state, setState] = useState<RunState>(IDLE);
   const abortRef = useRef<AbortController | null>(null);
 
-  const run = useCallback(async (drugs: string[]): Promise<InteractionReport | null> => {
+  const run = useCallback(async (drugs: DrugInput[]): Promise<InteractionReport | null> => {
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
@@ -108,6 +108,7 @@ export function useInteractionCheck() {
         kind: pairKind(p),
         explanation: p.explanation,
         dbCondition: p.db_condition,
+        ingredientPairs: p.ingredient_pairs,
         pending: false,
       }));
     }

@@ -53,8 +53,16 @@ export const QueryResponseSchema = Type.Object({
 export type QueryResponse = Static<typeof QueryResponseSchema>;
 
 // ---- v2 ----
+/** A drug name, or a product (e.g. a supplement read from a photo) whose ingredients are checked as one drug. */
+const V2DrugSchema = Type.Union([
+  Type.String({ minLength: 1 }),
+  Type.Object({
+    name: Type.String({ minLength: 1 }),
+    ingredients: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { maxItems: 60 })),
+  }),
+]);
 export const V2InteractionsRequestSchema = Type.Union([
-  Type.Object({ drugs: Type.Array(Type.String({ minLength: 1 }), { minItems: 2, maxItems: 10 }) }),
+  Type.Object({ drugs: Type.Array(V2DrugSchema, { minItems: 2, maxItems: 10 }) }),
   Type.Object({ text: Type.String({ minLength: 1 }) }),
 ]);
 export const V2ChatRequestSchema = Type.Object({

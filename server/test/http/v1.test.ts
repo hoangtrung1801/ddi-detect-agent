@@ -204,6 +204,45 @@ describe('v1 drug-name-extract', () => {
     expect(b.result).toEqual(['Paracetamol', 'Caffeine']);
   });
 
+  it('returns one product with its ingredients', async () => {
+    const env = await makeHttpEnv();
+    env.setResponses([call('submit_ingredients', { product_name: ' GH Creation EX+ ', active_ingredients: [{ name: 'L-Lysine', strength: '0.9 mg' }, { name: '[unclear]' }, { name: 'Alpha-GPC' }] })]);
+    const res = await env.json('/drug-name-extract', 'POST', { image_url: `data:image/png;base64,${png.toString('base64')}` });
+    const b = await res.json();
+    shape(C.ExtractShape, b);
+    expect(b.product_name).toBe('GH Creation EX+');
+    expect(b.ingredients).toEqual([{ name: 'L-Lysine', strength: '0.9 mg' }, { name: 'Alpha-GPC' }]);
+    expect(b.result).toEqual(['L-Lysine', 'Alpha-GPC']);
+  });
+
+  it('product_name is null when the label has none', async () => {
+    const env = await makeHttpEnv();
+    env.setResponses([ingredients(['Paracetamol'])]);
+    const res = await env.json('/drug-name-extract', 'POST', { image_url: `data:image/png;base64,${png.toString('base64')}` });
+    expect((await res.json()).product_name).toBeNull();
+  });
+
+  it('returns every ingredient, not just the headline one', async () => {
+    const env = await makeHttpEnv();
+    const all = ['Collagen peptide', 'Dried yeast', 'L-Arginine', 'L-Leucine', 'Zinc yeast', 'Alpha-GPC'];
+    env.setResponses([ingredients(all)]);
+    const res = await env.json('/drug-name-extract', 'POST', { image_url: `data:image/png;base64,${png.toString('base64')}` });
+    const b = await res.json();
+    expect(b.result).toEqual(all);
+    expect(b.evidences).toEqual([]);
+  });
+
+  it('searches the web for the composition, then submits', async () => {
+    const env = await makeHttpEnv();
+    env.setResponses([call('web_search', { query: 'GH Creation EX+ ingredients' }), ingredients(['Collagen peptide', 'Alpha-GPC'])]);
+    const res = await env.json('/drug-name-extract', 'POST', { image_url: `data:image/png;base64,${png.toString('base64')}` });
+    expect(res.status).toBe(200);
+    const b = await res.json();
+    expect(b.result).toEqual(['Collagen peptide', 'Alpha-GPC']);
+    expect(env.searches).toEqual(['GH Creation EX+ ingredients']);
+    expect(b.evidences).toEqual([{ url: 'https://example.org/a', title: 'A', query: 'GH Creation EX+ ingredients' }]);
+  });
+
   it('accepts a multipart upload (no Cloudinary)', async () => {
     const env = await makeHttpEnv();
     env.setResponses([ingredients(['Ibuprofen'])]);

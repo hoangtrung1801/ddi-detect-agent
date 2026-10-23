@@ -4,7 +4,7 @@ export type Severity = "major" | "moderate" | "minor";
 export type PairStatus = "interaction" | "no_record" | "unresolved";
 export type OverallRisk = "high" | "medium" | "low" | "none" | "unknown";
 
-export interface ResolvedDrug {
+export interface ResolvedIngredient {
   input: string;
   generic: string;
   dbName: string | null;
@@ -13,13 +13,49 @@ export interface ResolvedDrug {
   alternatives: { name: string; score: number }[];
 }
 
+/** For a multi-ingredient product, `input` is the product name and `ingredients` has each ingredient's resolution. */
+export interface ResolvedDrug extends ResolvedIngredient {
+  ingredients?: ResolvedIngredient[];
+}
+
+export interface IngredientPair {
+  a: string;
+  b: string;
+  condition: string;
+}
+
 export interface ReportPair {
   a: string;
   b: string;
   status: PairStatus;
   severity?: Severity;
   db_condition?: string;
+  /** Pairs involving a multi-ingredient product: the ingredient pairs the database records. */
+  ingredient_pairs?: IngredientPair[];
   explanation: string;
+}
+
+/** Reference page for a drug. Long Châu is preferred, then drugs.com, then a generic drugs.com search. */
+export interface LinkInfo {
+  url: string;
+  verified: boolean;
+  source?: "longchau" | "drugs.com" | "drugs.com-search";
+  title?: string;
+}
+
+const LINK_SOURCE_LABEL: Record<NonNullable<LinkInfo["source"]>, string> = {
+  longchau: "Nhà thuốc Long Châu",
+  "drugs.com": "Drugs.com",
+  "drugs.com-search": "Tìm trên Drugs.com",
+};
+
+export function linkSourceLabel(l: LinkInfo): string {
+  return LINK_SOURCE_LABEL[l.source ?? "drugs.com"];
+}
+
+/** Long Châu first, then specific drugs.com pages, then generic searches. */
+export function linkPriority(l: LinkInfo): number {
+  return l.source === "longchau" ? 0 : l.source === "drugs.com-search" ? 2 : 1;
 }
 
 export interface InteractionReport {
@@ -28,7 +64,7 @@ export interface InteractionReport {
   pairs: ReportPair[];
   overall_risk: OverallRisk;
   recommendations: string[];
-  links: Record<string, { url: string; verified: boolean }>;
+  links: Record<string, LinkInfo>;
   disclaimer: string;
 }
 
@@ -46,7 +82,7 @@ export type ProgressEvent =
   | { type: "tool_end"; tool: string; ok: boolean; ms: number }
   | { type: "resolved"; drugs: ResolvedDrug[] }
   | { type: "pairs"; pairs: PairResult[] }
-  | { type: "links"; links: Record<string, { url: string; verified: boolean }> };
+  | { type: "links"; links: Record<string, LinkInfo> };
 
 /** One visual category per pair: interaction severities plus the two "unknown" states. */
 export type PairKind = Severity | "no_record" | "unresolved";

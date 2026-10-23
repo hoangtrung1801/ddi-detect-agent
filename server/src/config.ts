@@ -43,10 +43,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const num = (v: string | undefined, d: number) => (v === undefined || v === '' ? d : Number(v));
   const cfg = {
     openaiApiKey: env.OPENAI_API_KEY ?? '',
-    agentModel: env.AGENT_MODEL ?? 'gpt-5.4-mini',
-    chatModel: env.CHAT_MODEL ?? 'gpt-5.4-mini',
-    extractModel: env.EXTRACT_MODEL ?? 'gpt-5.4-mini',
-    webSearchModel: env.WEB_SEARCH_MODEL ?? 'gpt-5.4-mini',
+    agentModel: env.AGENT_MODEL ?? 'gpt-6-luna',
+    chatModel: env.CHAT_MODEL ?? 'gpt-6-luna',
+    extractModel: env.EXTRACT_MODEL ?? 'gpt-6-luna',
+    webSearchModel: env.WEB_SEARCH_MODEL ?? 'gpt-6-luna',
     reasoningEffort: env.REASONING_EFFORT ?? 'low',
     port: num(env.PORT, 8000),
     corsOrigins: (env.CORS_ORIGINS ?? 'http://localhost:5173,http://localhost:3000')

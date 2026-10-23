@@ -24,7 +24,13 @@ export const QueryResponseShape = Type.Object({
 export const ChatResponseShape = Type.Object({ answer: Type.String(), session_id: Type.String(), timestamp: Type.String() });
 export const StatsShape = Type.Object({ total_drugs: Type.Integer(), total_interactions: Type.Integer(), active_sessions: Type.Integer() });
 export const HealthShape = Type.Object({ status: Type.String(), agent_loaded: Type.Boolean(), timestamp: Type.String() });
-export const ExtractShape = Type.Object({ result: Type.Array(Type.String()), timestamp: Type.String() });
+export const ExtractShape = Type.Object({
+  result: Type.Array(Type.String()),
+  product_name: Type.Union([Type.String(), Type.Null()]),
+  ingredients: Type.Array(Type.Object({ name: Type.String(), strength: Type.Optional(Type.String()) })),
+  evidences: Type.Array(Type.Object({ url: Type.String(), title: Type.String(), query: Type.String() })),
+  timestamp: Type.String(),
+});
 export const AddDrugShape = Type.Object({
   success: Type.Boolean(),
   message: Type.String(),

@@ -10,7 +10,10 @@ interface Listing { recordsTotal: number; recordsFiltered: number; data: Listing
 export interface CrawlOptions {
   database: string;
   archive: string;
+  /** Minimum spacing between request starts, shared by all workers. */
   intervalMs?: number;
+  /** Maximum requests in flight at once. */
+  concurrency?: number;
   maxPages?: number;
   pageIds?: number[];
   signal?: AbortSignal;
@@ -107,17 +110,23 @@ export async function crawlInteractionDetails(options: CrawlOptions): Promise<Cr
   const insertPage = archive.prepare('INSERT INTO pages(id,a,b) VALUES (?,?,?) ON CONFLICT(id) DO NOTHING');
   let cookie = '';
   let token = '';
-  let lastRequestAt = 0;
+  let nextSlot = 0;
+  let halted: Error | undefined;
   let fetched = 0;
   let actions = 0;
   const base = options.baseUrl ?? 'https://ddinter2.scbdd.com';
-  const intervalMs = options.intervalMs ?? 1000;
+  const intervalMs = options.intervalMs ?? 250;
+  const concurrency = options.concurrency ?? 4;
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1) throw new Error('concurrency must be a positive integer');
   const request = async (path: string, body?: URLSearchParams): Promise<Response> => {
     for (let attempt = 0; attempt < 3; attempt++) {
       options.signal?.throwIfAborted();
-      const wait = Math.max(0, lastRequestAt + intervalMs - Date.now());
-      if (wait) await sleep(wait, undefined, { signal: options.signal });
-      lastRequestAt = Date.now();
+      if (halted) throw halted;
+      // Reserve the next start slot synchronously so concurrent workers stay evenly spaced.
+      const slot = Math.max(nextSlot, Date.now());
+      nextSlot = slot + intervalMs;
+      if (slot > Date.now()) await sleep(slot - Date.now(), undefined, { signal: options.signal });
+      if (halted) throw halted;
       const headers = new Headers({ 'User-Agent': 'DDI-Research-Enrichment/1.0 (+https://github.com/hoangtrung1801/ddi-detect-agent)', Referer: `${base}/server/interaction/` });
       if (cookie) headers.set('Cookie', cookie);
       if (body) { body.set('csrfmiddlewaretoken', token); headers.set('Content-Type', 'application/x-www-form-urlencoded'); }
@@ -129,9 +138,9 @@ export async function crawlInteractionDetails(options: CrawlOptions): Promise<Cr
         const until = value && /^\d+$/.test(value) ? Date.now() + Number(value) * 1000 : value ? Date.parse(value) : Date.now() + 60000;
         meta.run('retry_after', String(Number.isFinite(until) ? until : Date.now() + 60000));
         await response.body?.cancel();
-        throw new Error('HTTP 429: crawl paused; resume after the Retry-After deadline recorded in the archive');
+        throw (halted = new Error('HTTP 429: crawl paused; resume after the Retry-After deadline recorded in the archive'));
       }
-      if (response.status === 401 || response.status === 403) { await response.body?.cancel(); throw new Error(`HTTP ${response.status}: access denied; no bypass attempted`); }
+      if (response.status === 401 || response.status === 403) { await response.body?.cancel(); throw (halted = new Error(`HTTP ${response.status}: access denied; no bypass attempted`)); }
       if (response.status >= 500 && attempt < 2) { await response.body?.cancel(); await sleep(2000 * 2 ** attempt, undefined, { signal: options.signal }); continue; }
       return response;
     }
@@ -161,6 +170,30 @@ export async function crawlInteractionDetails(options: CrawlOptions): Promise<Cr
       throw error;
     }
   };
+  const discover = async (job: { drug_id: string; offset: number }) => {
+    const response = await request(`/server/interact-with/${job.drug_id}/`, new URLSearchParams({ start: String(job.offset), length: '100', draw: '1', severity: '', mechanism: '' }));
+    if (!response.ok) throw new Error(`Pair listing HTTP ${response.status}`);
+    const body = await response.text();
+    const listing = JSON.parse(body) as Listing;
+    if (!Number.isInteger(listing.recordsTotal) || listing.recordsTotal < 0 || listing.recordsTotal !== listing.recordsFiltered || !Array.isArray(listing.data) || (!listing.data.length && job.offset < listing.recordsTotal)) throw new Error(`Invalid/unexpected listing response for ${job.drug_id}`);
+    archive.transaction(() => {
+      for (const row of listing.data) {
+        if (!/^DDInter\d+$/.test(row.drug_id) || !Number.isInteger(row.interaction_id) || row.interaction_id < 1) throw new Error('Malformed pair index entry');
+        const target = targetByPair.get([job.drug_id, row.drug_id].sort().join('|'));
+        if (target) insertPage.run(row.interaction_id, target.a, target.b);
+      }
+      const next = job.offset + listing.data.length;
+      archive.prepare('UPDATE discovery SET offset=?,complete=?,total=? WHERE drug_id=?').run(next, Number(next >= listing.recordsTotal), listing.recordsTotal, job.drug_id);
+      archive.prepare('INSERT OR REPLACE INTO listings VALUES (?,?,?,?,?,?)').run(job.drug_id, job.offset, listing.recordsTotal, listing.data.length, createHash('sha256').update(body).digest('hex'), new Date().toISOString());
+    })();
+    if (++actions % 100 === 0) publish();
+  };
+  /** Let every in-flight request finish and record its state, then surface the first failure. */
+  const settleAll = async (work: Promise<unknown>[]) => {
+    const results = await Promise.allSettled(work);
+    const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failed) throw halted ?? failed.reason;
+  };
   try {
     const retry = archive.prepare('SELECT value FROM metadata WHERE key=?').get('retry_after') as { value: string } | undefined;
     if (retry && Number(retry.value) > Date.now()) throw new Error(`Rate-limit deadline has not elapsed: ${new Date(Number(retry.value)).toISOString()}`);
@@ -189,34 +222,19 @@ export async function crawlInteractionDetails(options: CrawlOptions): Promise<Cr
     for (;;) {
       options.signal?.throwIfAborted();
       if (options.maxPages !== undefined && fetched >= options.maxPages) { meta.run('state', 'paused'); break; }
-      const pending = archive.prepare("SELECT id,a,b FROM pages WHERE state='pending' ORDER BY id LIMIT 1").get() as { id: number; a: number; b: number } | undefined;
-      if (pending) {
-        const target = targetByLocalPair.get(`${pending.a}:${pending.b}`)!;
-        await savePage(pending.id, target);
+      const room = options.maxPages === undefined ? concurrency : Math.min(concurrency, options.maxPages - fetched);
+      const pending = archive.prepare("SELECT id,a,b FROM pages WHERE state='pending' ORDER BY id LIMIT ?").all(room) as { id: number; a: number; b: number }[];
+      if (pending.length) {
+        await settleAll(pending.map((page) => savePage(page.id, targetByLocalPair.get(`${page.a}:${page.b}`)!)));
         continue;
       }
-      const job = archive.prepare('SELECT drug_id,offset FROM discovery WHERE complete=0 ORDER BY rowid LIMIT 1').get() as { drug_id: string; offset: number } | undefined;
-      if (!job) {
+      const jobs = archive.prepare('SELECT drug_id,offset FROM discovery WHERE complete=0 ORDER BY rowid LIMIT ?').all(concurrency) as { drug_id: string; offset: number }[];
+      if (!jobs.length) {
         const status = crawlStatus(archive);
         meta.run('state', status.enrichedPairs === status.targetPairs && !status.missingPages && !status.failedPages ? 'completed' : 'completed_with_gaps');
         break;
       }
-      const response = await request(`/server/interact-with/${job.drug_id}/`, new URLSearchParams({ start: String(job.offset), length: '100', draw: '1', severity: '', mechanism: '' }));
-      if (!response.ok) throw new Error(`Pair listing HTTP ${response.status}`);
-      const body = await response.text();
-      const listing = JSON.parse(body) as Listing;
-      if (!Number.isInteger(listing.recordsTotal) || listing.recordsTotal < 0 || listing.recordsTotal !== listing.recordsFiltered || !Array.isArray(listing.data) || (!listing.data.length && job.offset < listing.recordsTotal)) throw new Error(`Invalid/unexpected listing response for ${job.drug_id}`);
-      archive.transaction(() => {
-        for (const row of listing.data) {
-          if (!/^DDInter\d+$/.test(row.drug_id) || !Number.isInteger(row.interaction_id) || row.interaction_id < 1) throw new Error('Malformed pair index entry');
-          const target = targetByPair.get([job.drug_id, row.drug_id].sort().join('|'));
-          if (target) insertPage.run(row.interaction_id, target.a, target.b);
-        }
-        const next = job.offset + listing.data.length;
-        archive.prepare('UPDATE discovery SET offset=?,complete=?,total=? WHERE drug_id=?').run(next, Number(next >= listing.recordsTotal), listing.recordsTotal, job.drug_id);
-        archive.prepare('INSERT OR REPLACE INTO listings VALUES (?,?,?,?,?,?)').run(job.drug_id, job.offset, listing.recordsTotal, listing.data.length, createHash('sha256').update(body).digest('hex'), new Date().toISOString());
-      })();
-      if (++actions % 100 === 0) publish();
+      await settleAll(jobs.map(discover));
     }
     publish();
     return crawlStatus(archive);

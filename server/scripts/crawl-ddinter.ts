@@ -5,9 +5,9 @@ import Database from 'better-sqlite3';
 import { crawlInteractionDetails, crawlStatus } from '../src/domain/ddinter-crawler.ts';
 
 const args = process.argv.slice(2).filter((a) => a !== '--');
-const allowed = ['--status', '--max-pages=', '--page-ids='];
+const allowed = ['--status', '--max-pages=', '--page-ids=', '--concurrency=', '--interval-ms='];
 if (args.some((a) => !allowed.some((prefix) => prefix.endsWith('=') ? a.startsWith(prefix) : a === prefix))) {
-  throw new Error('Usage: pnpm data:crawl [--status] [--max-pages=N] [--page-ids=23,24]');
+  throw new Error('Usage: pnpm data:crawl [--status] [--max-pages=N] [--page-ids=23,24] [--concurrency=N] [--interval-ms=N]');
 }
 const data = process.env.DATA_DIR ?? fileURLToPath(new URL('../data', import.meta.url));
 const database = process.env.DDI_DB_PATH ?? `${data}/ddi.sqlite`;
@@ -23,6 +23,15 @@ if (args.includes('--status')) {
   const limit = args.find((a) => a.startsWith('--max-pages='))?.split('=')[1];
   const maxPages = limit === undefined ? undefined : Number(limit);
   if (maxPages !== undefined && (!Number.isSafeInteger(maxPages) || maxPages < 1)) throw new Error('--max-pages must be a positive integer');
+  const numberFlag = (name: string, min: number) => {
+    const raw = args.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
+    if (raw === undefined) return undefined;
+    const value = Number(raw);
+    if (!Number.isSafeInteger(value) || value < min) throw new Error(`--${name} must be an integer >= ${min}`);
+    return value;
+  };
+  const concurrency = numberFlag('concurrency', 1);
+  const intervalMs = numberFlag('interval-ms', 0);
   const ids = args.find((a) => a.startsWith('--page-ids='))?.split('=')[1];
   const pageIds = ids?.split(',').map(Number);
   if (pageIds?.some((id) => !Number.isSafeInteger(id) || id < 1)) throw new Error('--page-ids must contain positive integer IDs');
@@ -42,7 +51,7 @@ if (args.includes('--status')) {
   process.on('SIGINT', stop); process.on('SIGTERM', stop);
   let ready = false;
   try {
-    const status = await crawlInteractionDetails({ database, archive: archivePath, maxPages, pageIds, signal: abort.signal, onProgress: (progress) => {
+    const status = await crawlInteractionDetails({ database, archive: archivePath, maxPages, pageIds, concurrency, intervalMs, signal: abort.signal, onProgress: (progress) => {
       if (!ready && progress.state === 'running' && progress.completedPages > 0) { ready = true; console.log('DDINTER_CRAWL_READY'); }
       console.log(JSON.stringify({ at: new Date().toISOString(), ...progress }));
     } });

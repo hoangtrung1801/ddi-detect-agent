@@ -132,6 +132,75 @@ describe('resumable HTTP enrichment', () => {
     } finally { await close(server); rmSync(dir, { recursive: true, force: true }); }
   });
 
+  describe('concurrent crawling', () => {
+    const names = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta'];
+    const starHtml = (n: number) => pageHTML().replace('<a>DDInter2</a>', `<a>DDInter${n}</a>`);
+    function createStarCatalog(path: string) {
+      const db = new Database(path);
+      buildDdiDb(db, names.slice(1).map((name, i) => ({ drug_1: 'Alpha', drug_2: name, condition: 'CSV risk only', drug_1_id: 'DDInter1', drug_2_id: `DDInter${i + 2}`, level: 'Moderate', source_rows: `A.csv:${i + 2}` })));
+      db.close();
+    }
+    function starServer(onDetail: (id: number, res: import('node:http').ServerResponse) => void) {
+      return createServer(async (req, res) => {
+        if (req.url === '/robots.txt') { res.writeHead(404).end(); return; }
+        if (req.url === '/server/interaction/') { res.end("<script>csrfmiddlewaretoken: 'public-token'</script>"); return; }
+        if (req.url === '/server/interact-with/DDInter1/') {
+          for await (const _ of req) { /* drain */ }
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ recordsTotal: 5, recordsFiltered: 5, data: [2, 3, 4, 5, 6].map((n) => ({ drug_id: `DDInter${n}`, interaction_id: 700 + n })) })); return;
+        }
+        const id = Number(req.url?.match(/^\/server\/interact\/(\d+)\/$/)?.[1]);
+        if (id) { onDetail(id, res); return; }
+        res.writeHead(404).end();
+      });
+    }
+
+    it('keeps in-flight requests within the concurrency cap and enriches every pair', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'ddi-conc-'));
+      const database = join(dir, 'ddi.sqlite'); createStarCatalog(database);
+      let inFlight = 0, maxInFlight = 0;
+      const server = starServer((id, res) => {
+        inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
+        setTimeout(() => { inFlight--; res.end(starHtml(id - 700)); }, 40);
+      });
+      const baseUrl = await listen(server);
+      try {
+        const status = await crawlInteractionDetails({ database, archive: join(dir, 'crawl.sqlite'), baseUrl, intervalMs: 0, concurrency: 3 });
+        expect(status.state).toBe('completed'); expect(status.enrichedPairs).toBe(5);
+        expect(maxInFlight).toBeGreaterThan(1); expect(maxInFlight).toBeLessThanOrEqual(3);
+      } finally { await close(server); rmSync(dir, { recursive: true, force: true }); }
+    });
+
+    it('spaces request starts by the shared interval across workers', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'ddi-pace-'));
+      const database = join(dir, 'ddi.sqlite'); createStarCatalog(database);
+      const starts: number[] = [];
+      const server = starServer((id, res) => { starts.push(Date.now()); res.end(starHtml(id - 700)); });
+      const baseUrl = await listen(server);
+      try {
+        await crawlInteractionDetails({ database, archive: join(dir, 'crawl.sqlite'), baseUrl, intervalMs: 60, concurrency: 5 });
+        expect(starts).toHaveLength(5);
+        const sorted = [...starts].sort((a, b) => a - b);
+        for (let i = 1; i < sorted.length; i++) expect(sorted[i]! - sorted[i - 1]!).toBeGreaterThanOrEqual(45);
+      } finally { await close(server); rmSync(dir, { recursive: true, force: true }); }
+    });
+
+    it('halts every worker on HTTP 429 and records the Retry-After deadline', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'ddi-429-'));
+      const database = join(dir, 'ddi.sqlite'); createStarCatalog(database);
+      let detailRequests = 0;
+      const server = starServer((_id, res) => { detailRequests++; res.writeHead(429, { 'Retry-After': '120' }).end(); });
+      const baseUrl = await listen(server);
+      try {
+        const archivePath = join(dir, 'crawl.sqlite');
+        await expect(crawlInteractionDetails({ database, archive: archivePath, baseUrl, intervalMs: 0, concurrency: 3 })).rejects.toThrow(/429/);
+        expect(detailRequests).toBeLessThanOrEqual(3);
+        await expect(crawlInteractionDetails({ database, archive: archivePath, baseUrl, intervalMs: 0, concurrency: 3 })).rejects.toThrow(/Rate-limit deadline/);
+        expect(detailRequests).toBeLessThanOrEqual(3);
+      } finally { await close(server); rmSync(dir, { recursive: true, force: true }); }
+    });
+  });
+
   it('chooses discovery endpoints that cover every target pair', () => {
     const targets = [
       { a: 1, b: 2, source_a: 'DDInter1', source_b: 'DDInter2' },

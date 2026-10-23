@@ -116,7 +116,7 @@ export async function crawlInteractionDetails(options: CrawlOptions): Promise<Cr
   let actions = 0;
   const base = options.baseUrl ?? 'https://ddinter2.scbdd.com';
   const intervalMs = options.intervalMs ?? 250;
-  const concurrency = options.concurrency ?? 4;
+  const concurrency = options.concurrency ?? 6;
   if (!Number.isSafeInteger(concurrency) || concurrency < 1) throw new Error('concurrency must be a positive integer');
   const request = async (path: string, body?: URLSearchParams): Promise<Response> => {
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -188,12 +188,6 @@ export async function crawlInteractionDetails(options: CrawlOptions): Promise<Cr
     })();
     if (++actions % 100 === 0) publish();
   };
-  /** Let every in-flight request finish and record its state, then surface the first failure. */
-  const settleAll = async (work: Promise<unknown>[]) => {
-    const results = await Promise.allSettled(work);
-    const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
-    if (failed) throw halted ?? failed.reason;
-  };
   try {
     const retry = archive.prepare('SELECT value FROM metadata WHERE key=?').get('retry_after') as { value: string } | undefined;
     if (retry && Number(retry.value) > Date.now()) throw new Error(`Rate-limit deadline has not elapsed: ${new Date(Number(retry.value)).toISOString()}`);
@@ -219,22 +213,44 @@ export async function crawlInteractionDetails(options: CrawlOptions): Promise<Cr
     // The public listing currently supplies an embedded token but no Set-Cookie header.
     // Send only session material actually issued by the site; a 401/403 always stops the crawl.
     if (!token) throw new Error('Public listing did not supply its normal CSRF token; no bypass attempted');
+    // Rolling worker pool: a slow response never stalls the other slots. Pending pages take priority over discovery.
+    const inflightPages = new Set<number>(), inflightJobs = new Set<string>();
+    const limitReached = () => options.maxPages !== undefined && fetched + inflightPages.size >= options.maxPages;
+    const claim = (): (() => Promise<void>) | undefined => {
+      if (limitReached()) return undefined;
+      const pages = archive.prepare("SELECT id,a,b FROM pages WHERE state='pending' ORDER BY id LIMIT ?").all(inflightPages.size + 1) as { id: number; a: number; b: number }[];
+      const page = pages.find((p) => !inflightPages.has(p.id));
+      if (page) {
+        inflightPages.add(page.id);
+        return () => savePage(page.id, targetByLocalPair.get(`${page.a}:${page.b}`)!).finally(() => inflightPages.delete(page.id));
+      }
+      const jobs = archive.prepare('SELECT drug_id,offset FROM discovery WHERE complete=0 ORDER BY rowid LIMIT ?').all(inflightJobs.size + 1) as { drug_id: string; offset: number }[];
+      const job = jobs.find((j) => !inflightJobs.has(j.drug_id));
+      if (!job) return undefined;
+      inflightJobs.add(job.drug_id);
+      return () => discover(job).finally(() => inflightJobs.delete(job.drug_id));
+    };
+    const running = new Set<Promise<void>>();
+    let failure: unknown;
     for (;;) {
       options.signal?.throwIfAborted();
-      if (options.maxPages !== undefined && fetched >= options.maxPages) { meta.run('state', 'paused'); break; }
-      const room = options.maxPages === undefined ? concurrency : Math.min(concurrency, options.maxPages - fetched);
-      const pending = archive.prepare("SELECT id,a,b FROM pages WHERE state='pending' ORDER BY id LIMIT ?").all(room) as { id: number; a: number; b: number }[];
-      if (pending.length) {
-        await settleAll(pending.map((page) => savePage(page.id, targetByLocalPair.get(`${page.a}:${page.b}`)!)));
-        continue;
+      while (failure === undefined && running.size < concurrency) {
+        const task = claim();
+        if (!task) break;
+        const done: Promise<void> = task().catch((error) => { failure ??= error; }).finally(() => running.delete(done));
+        running.add(done);
       }
-      const jobs = archive.prepare('SELECT drug_id,offset FROM discovery WHERE complete=0 ORDER BY rowid LIMIT ?').all(concurrency) as { drug_id: string; offset: number }[];
-      if (!jobs.length) {
-        const status = crawlStatus(archive);
-        meta.run('state', status.enrichedPairs === status.targetPairs && !status.missingPages && !status.failedPages ? 'completed' : 'completed_with_gaps');
-        break;
+      if (!running.size) break;
+      await Promise.race(running);
+      if (failure !== undefined) {
+        await Promise.allSettled(running); // let in-flight requests record their state before surfacing the error
+        throw halted ?? failure;
       }
-      await settleAll(jobs.map(discover));
+    }
+    if (options.maxPages !== undefined && fetched >= options.maxPages) meta.run('state', 'paused');
+    else {
+      const status = crawlStatus(archive);
+      meta.run('state', status.enrichedPairs === status.targetPairs && !status.missingPages && !status.failedPages ? 'completed' : 'completed_with_gaps');
     }
     publish();
     return crawlStatus(archive);

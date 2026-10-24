@@ -185,6 +185,21 @@ describe('resumable HTTP enrichment', () => {
       } finally { await close(server); rmSync(dir, { recursive: true, force: true }); }
     });
 
+    it('retries a dropped connection instead of failing the crawl', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'ddi-retry-'));
+      const database = join(dir, 'ddi.sqlite'); createStarCatalog(database);
+      const dropped = new Set<number>();
+      const server = starServer((id, res) => {
+        if (id === 703 && !dropped.has(id)) { dropped.add(id); res.socket?.destroy(); return; }
+        res.end(starHtml(id - 700));
+      });
+      const baseUrl = await listen(server);
+      try {
+        const status = await crawlInteractionDetails({ database, archive: join(dir, 'crawl.sqlite'), baseUrl, intervalMs: 0, concurrency: 3 });
+        expect(dropped.size).toBe(1); expect(status.state).toBe('completed'); expect(status.enrichedPairs).toBe(5);
+      } finally { await close(server); rmSync(dir, { recursive: true, force: true }); }
+    });
+
     it('halts every worker on HTTP 429 and records the Retry-After deadline', async () => {
       const dir = mkdtempSync(join(tmpdir(), 'ddi-429-'));
       const database = join(dir, 'ddi.sqlite'); createStarCatalog(database);

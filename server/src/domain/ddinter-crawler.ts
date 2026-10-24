@@ -130,7 +130,15 @@ export async function crawlInteractionDetails(options: CrawlOptions): Promise<Cr
       const headers = new Headers({ 'User-Agent': 'DDI-Research-Enrichment/1.0 (+https://github.com/hoangtrung1801/ddi-detect-agent)', Referer: `${base}/server/interaction/` });
       if (cookie) headers.set('Cookie', cookie);
       if (body) { body.set('csrfmiddlewaretoken', token); headers.set('Content-Type', 'application/x-www-form-urlencoded'); }
-      const response = await fetch(`${base}${path}`, { method: body ? 'POST' : 'GET', headers, body, signal: AbortSignal.any([AbortSignal.timeout(60000), ...(options.signal ? [options.signal] : [])]) });
+      let response: Response;
+      try {
+        response = await fetch(`${base}${path}`, { method: body ? 'POST' : 'GET', headers, body, signal: AbortSignal.any([AbortSignal.timeout(60000), ...(options.signal ? [options.signal] : [])]) });
+      } catch (error) {
+        // Timeouts and dropped connections are transient; a user abort or an exhausted retry budget still fails.
+        if (options.signal?.aborted || attempt >= 2) throw error;
+        await sleep(2000 * 2 ** attempt, undefined, { signal: options.signal });
+        continue;
+      }
       const cookies = response.headers.getSetCookie();
       if (cookies.length) cookie = cookies.map((c) => c.split(';')[0]).join('; ');
       if (response.status === 429) {

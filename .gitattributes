@@ -1,0 +1,2 @@
+server/data/ddi.sqlite filter=lfs diff=lfs merge=lfs -text
+server/data/drug-vectors.f32 filter=lfs diff=lfs merge=lfs -text

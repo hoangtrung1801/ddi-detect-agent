@@ -17,6 +17,8 @@ pnpm data:build
 pnpm start
 ```
 
+The generated `server/data/ddi.sqlite`, `drug-names.json` and `drug-vectors.f32` are committed (the first and last through Git LFS), so a fresh clone needs `git lfs install` and `git lfs pull` but not `pnpm data:build`. Re-run `data:build` and commit the results whenever the source CSV or crawled evidence changes.
+
 Stop running backend processes before rebuilding, and restart them afterward: an already-open SQLite connection and resolver retain the previous catalog. `data:build` stages the database, name list, and embeddings before replacing active files; it does not hot-swap a running server. `APP_DB_PATH` session/cabinet data is not replaced.
 
 - `data:download` downloads all eight files currently linked by the official page (ATC A, B, D, H, L, P, R, V), saves originals under `server/data/ddinter/raw/`, and replaces root `db_drug_interactions.csv` with deterministic, deduplicated records. The processed columns are `drug_1,drug_2,condition,drug_1_id,drug_2_id,level,source_rows`.

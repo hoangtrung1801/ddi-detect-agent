@@ -8,3 +8,8 @@ data/ddinter/*
 *.sqlite-wal
 *.sqlite-shm
 eval-results/
+
+# Generated DDInter build outputs are committed (large binaries via Git LFS, see .gitattributes)
+!data/ddi.sqlite
+!data/drug-names.json
+!data/drug-vectors.f32

@@ -104,9 +104,8 @@ export const drugInteractionAPI = {
     formData.append("file", file);
 
     const response = await api.post<DrugNamesFromImageResponse>("/drug-name-extract/upload", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
+    // Let the browser set Content-Type so the multipart boundary is included.
+      headers: { "Content-Type": undefined },
     });
     return response.data;
   },

@@ -6,6 +6,7 @@ import { CheckStart } from "@/components/check/CheckStart";
 import { DrugBar, resolutionOf } from "@/components/check/DrugBar";
 import { ResultsPanel } from "@/components/check/ResultsPanel";
 import { useInteractionCheck } from "@/components/check/useInteractionCheck";
+import { photoErrorMessage, prepareImage } from "@/lib/image";
 import { MAX_DRUGS, type DrugEntry, type PhotoEntry, type ProductKind } from "@/components/check/types";
 
 let nextId = 0;
@@ -76,8 +77,11 @@ export function InteractionCheckPage({ initialDrugs, onRequireLogin }: Interacti
 
   const readPhoto = async (photo: PhotoEntry) => {
     setPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, status: "loading" } : p)));
+    let stage: "convert" | "upload" = "convert";
     try {
-      const res = await drugInteractionAPI.extractDrugNamesFromImage(photo.file);
+      const prepared = await prepareImage(photo.file);
+      stage = "upload";
+      const res = await drugInteractionAPI.extractDrugNamesFromImage(prepared);
       const product = res.product_name?.trim() || undefined;
       setPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, status: "done", names: res.result, product } : p)));
       if (res.result.length > 1) {
@@ -86,8 +90,10 @@ export function InteractionCheckPage({ initialDrugs, onRequireLogin }: Interacti
       } else {
         for (const name of res.result) addDrug(name, photo.file.name);
       }
-    } catch {
-      setPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, status: "error" } : p)));
+    } catch (e) {
+      const error = photoErrorMessage(e, stage);
+      setPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, status: "error", error } : p)));
+      toast.error(`${photo.file.name}: ${error}`);
     }
   };
 

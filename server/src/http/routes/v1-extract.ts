@@ -5,6 +5,11 @@ import { DrugNamesFromImageRequestSchema } from '../../schemas/api.ts';
 import type { AppServices } from '../services.ts';
 import { nowIso, readBody } from '../util.ts';
 
+const EXT_TYPES: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp' };
+
+/** Some mobile browsers send uploads with an empty content type. */
+const mimeFromName = (name: string) => EXT_TYPES[name.split('.').pop()?.toLowerCase() ?? ''] ?? '';
+
 export function v1ExtractRoutes(s: AppServices): Hono {
   const r = new Hono();
 
@@ -42,7 +47,7 @@ export function v1ExtractRoutes(s: AppServices): Hono {
       }
       const file = form['file'];
       if (!(file instanceof File)) return c.json({ detail: 'Missing "file" upload field' }, 400);
-      const out = await run(async () => imageFromBytes(new Uint8Array(await file.arrayBuffer()), file.type), c.req.raw.signal);
+      const out = await run(async () => imageFromBytes(new Uint8Array(await file.arrayBuffer()), file.type || mimeFromName(file.name)), c.req.raw.signal);
       return out.ok ? c.json(out.body) : c.json({ detail: out.detail }, out.status);
     },
   );

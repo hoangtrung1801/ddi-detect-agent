@@ -3,6 +3,8 @@ import { useDropzone } from "react-dropzone";
 import { ArrowRight, Camera, Check, Layers, Loader2, Pill, RotateCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MAX_PICK_BYTES, PHOTO_ACCEPT } from "@/lib/image";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DrugSearch } from "./DrugSearch";
 import { MAX_DRUGS, type DrugEntry, type PhotoEntry, type ProductKind } from "./types";
@@ -46,11 +48,25 @@ export const CheckStart = forwardRef<HTMLInputElement, CheckStartProps>(function
   const quick = (cabinet ?? []).filter((n) => !added.has(n.toLowerCase())).slice(0, 6);
 
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
-    accept: { "image/*": [] },
-    maxSize: 8 * 1024 * 1024,
+    accept: PHOTO_ACCEPT,
+    maxSize: MAX_PICK_BYTES,
     noClick: true,
     noKeyboard: true,
     onDrop: (files) => files.length && onAddPhotos(files),
+    onDropRejected: (rejections) => {
+      for (const { file, errors } of rejections) {
+        const code = errors[0]?.code;
+        toast.error(
+          `${file.name}: ${
+            code === "file-too-large"
+              ? "ảnh quá lớn (tối đa 40 MB)."
+              : code === "file-invalid-type"
+                ? "định dạng không được hỗ trợ. Hãy chọn ảnh JPG, PNG, WebP, GIF, BMP, AVIF hoặc HEIC."
+                : "không thể tải ảnh lên."
+          }`,
+        );
+      }
+    },
   });
 
   return (
@@ -136,7 +152,7 @@ export const CheckStart = forwardRef<HTMLInputElement, CheckStartProps>(function
                         : p.names.length
                           ? `Đọc được: ${p.names[0]}`
                           : "Không đọc được tên thuốc nào")}
-                    {p.status === "error" && <span className="text-sev-major">Không đọc được ảnh</span>}
+                    {p.status === "error" && <span className="text-sev-major">{p.error ?? "Không đọc được ảnh"}</span>}
                   </div>
                 </div>
                 {p.status === "error" && (

@@ -46,6 +46,8 @@ export interface PhotoEntry {
   file: File;
   preview: string;
   status: "loading" | "done" | "error";
+  /** Vietnamese reason shown when status is "error". */
+  error?: string;
   /** Product name read from the photo, if legible. */
   product?: string;
   names: string[];

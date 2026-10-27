@@ -120,6 +120,8 @@ export const KIND_ORDER: PairKind[] = ["major", "unknown", "moderate", "minor", 
 
 export interface KindMeta {
   label: string;
+  /** Plain-language answer to "can I take these together?". */
+  answer: string;
   short: string;
   /** Badge / chip classes. */
   badge: string;
@@ -138,6 +140,7 @@ export interface KindMeta {
 export const KIND_META: Record<PairKind, KindMeta> = {
   major: {
     label: "Nghiêm trọng",
+    answer: "Không nên dùng chung",
     short: "Nặng",
     badge: "bg-sev-major text-white border border-sev-major",
     soft: "bg-sev-major-soft text-sev-major-ink border border-sev-major/30",
@@ -149,6 +152,7 @@ export const KIND_META: Record<PairKind, KindMeta> = {
   },
   moderate: {
     label: "Trung bình",
+    answer: "Dùng được nếu theo dõi",
     short: "Vừa",
     badge: "bg-sev-moderate text-sev-moderate-ink border border-sev-moderate",
     soft: "bg-sev-moderate-soft text-sev-moderate-ink border border-sev-moderate/40",
@@ -160,6 +164,7 @@ export const KIND_META: Record<PairKind, KindMeta> = {
   },
   minor: {
     label: "Nhẹ",
+    answer: "Thường dùng được, lưu ý nhẹ",
     short: "Nhẹ",
     badge: "bg-sev-minor-soft text-sev-minor border border-sev-minor/50",
     soft: "bg-sev-minor-soft text-sev-minor border border-sev-minor/30",
@@ -171,6 +176,7 @@ export const KIND_META: Record<PairKind, KindMeta> = {
   },
   unknown: {
     label: "Có tương tác · chưa rõ mức độ",
+    answer: "Có tương tác, chưa rõ mức độ",
     short: "Chưa rõ mức độ",
     badge: "bg-neutral-soft text-neutral-ink border border-neutral-line",
     soft: "bg-neutral-soft text-neutral-ink border border-neutral-line",
@@ -182,6 +188,7 @@ export const KIND_META: Record<PairKind, KindMeta> = {
   },
   no_record: {
     label: "Chưa có dữ liệu",
+    answer: "Không có ghi nhận tương tác",
     short: "Chưa có DL",
     badge: "bg-neutral-soft text-neutral-ink border border-neutral-line",
     soft: "bg-neutral-soft text-neutral-ink border border-neutral-line",
@@ -193,6 +200,7 @@ export const KIND_META: Record<PairKind, KindMeta> = {
   },
   unresolved: {
     label: "Không xác định",
+    answer: "Chưa tra được",
     short: "?",
     badge: "bg-card text-muted-foreground border border-dashed border-neutral-stroke",
     soft: "bg-card text-neutral-ink border border-dashed border-neutral-stroke",

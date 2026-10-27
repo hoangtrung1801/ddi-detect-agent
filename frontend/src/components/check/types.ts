@@ -25,3 +25,28 @@ export interface DisplayDrug {
 }
 
 export type KindFilter = "all" | PairKind;
+
+export const MAX_DRUGS = 10;
+
+/** What the user added: a single drug, a product of several ingredients, or a supplement (thực phẩm chức năng). */
+export type ProductKind = "drug" | "multi" | "supplement";
+
+export interface DrugEntry {
+  id: string;
+  name: string;
+  /** File name of the photo the name was read from, if any. */
+  source?: string;
+  /** Ingredients of a product: the entry is then ONE product made of these, checked ingredient by ingredient. */
+  ingredients?: string[];
+  kind?: ProductKind;
+}
+
+export interface PhotoEntry {
+  id: string;
+  file: File;
+  preview: string;
+  status: "loading" | "done" | "error";
+  /** Product name read from the photo, if legible. */
+  product?: string;
+  names: string[];
+}

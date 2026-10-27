@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { ArrowDown, ArrowRight, Camera, MessageCircleQuestion, Plus, Tag, Archive, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { MAX_DRUGS } from "@/components/check/DrugComposer";
+import { MAX_DRUGS } from "@/components/check/types";
 import { DemoStage } from "./DemoStage";
 import { DrugPhotoMock } from "./DrugPhotoMock";
 

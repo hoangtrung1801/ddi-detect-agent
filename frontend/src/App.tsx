@@ -15,9 +15,9 @@ const InteractionGraphPage = lazy(() =>
 type Page = "home" | "interaction" | "graph" | "cabinet";
 
 const NAV: { id: Page; label: string }[] = [
-  { id: "interaction", label: "Kiểm tra tương tác" },
+  { id: "interaction", label: "Kiểm tra thuốc" },
+  { id: "cabinet", label: "Tủ thuốc của tôi" },
   { id: "graph", label: "Đồ thị 3D" },
-  { id: "cabinet", label: "Tủ thuốc" },
 ];
 
 function Logo() {
@@ -73,9 +73,13 @@ function App() {
     <div className="flex min-h-screen flex-col bg-background">
       {page !== "home" && (
         <header className="border-b bg-card print:hidden">
-          <div className="mx-auto flex w-full max-w-[1280px] flex-wrap items-center gap-x-8 gap-y-3 px-4 py-3 sm:px-6">
+          <div className="mx-auto flex w-full max-w-[1200px] flex-wrap items-center justify-between gap-x-8 gap-y-2 px-4 py-3 sm:px-6">
             {home}
-            <nav aria-label="Điều hướng chính" className="flex flex-1 flex-wrap gap-1">
+            {/* Below md the nav drops to its own scrollable row under the logo and account. */}
+            <nav
+              aria-label="Điều hướng chính"
+              className="order-last -mx-4 flex w-[calc(100%+2rem)] gap-1 overflow-x-auto px-4 [scrollbar-width:none] md:order-none md:mx-0 md:w-auto md:flex-1 md:px-0"
+            >
               {NAV.map((n) => (
                 <button
                   key={n.id}
@@ -83,7 +87,7 @@ function App() {
                   aria-current={page === n.id ? "page" : undefined}
                   onClick={() => go(n.id)}
                   className={cn(
-                    "min-h-11 rounded-lg px-3.5 text-[15px] transition-colors",
+                    "min-h-11 shrink-0 rounded-lg px-3.5 text-[15px] whitespace-nowrap transition-colors",
                     page === n.id ? "bg-brand-soft font-semibold text-brand-ink" : "font-medium text-neutral-ink hover:bg-muted",
                   )}
                 >
@@ -111,7 +115,7 @@ function App() {
       </main>
 
       <footer className="border-t bg-card print:hidden">
-        <div className="mx-auto flex w-full max-w-[1280px] flex-wrap justify-between gap-2 px-4 py-4 text-sm text-muted-foreground sm:px-6">
+        <div className="mx-auto flex w-full max-w-[1200px] flex-wrap justify-between gap-2 px-4 py-4 text-sm text-muted-foreground sm:px-6">
           <span>DDISafe — phát hiện tương tác thuốc bằng AI. Thông tin chỉ mang tính tham khảo.</span>
           <a
             href="https://github.com/hoangtrung1801/ddi-detect-agent"

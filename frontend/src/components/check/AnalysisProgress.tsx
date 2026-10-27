@@ -31,14 +31,13 @@ export function AnalysisProgress({ steps, running, resolved, pairs }: AnalysisPr
   ];
 
   return (
-    <section aria-labelledby="progress-title" className="flex flex-col gap-3 rounded-2xl border bg-card px-6 py-5">
-      <div className="flex items-baseline justify-between">
-        <h2 id="progress-title" className="text-sm font-semibold">
-          Quá trình phân tích
-        </h2>
-        <span className="text-sm text-muted-foreground" aria-live="polite">
-          {running ? "Đang chạy…" : "Hoàn tất"}
-        </span>
+    <section aria-labelledby="progress-title" className="flex flex-col gap-4 rounded-2xl border bg-card px-5 py-5 sm:px-6">
+      <div className="flex flex-col gap-1">
+        <div className="text-[13px] font-bold tracking-wider text-muted-foreground uppercase">Kết luận</div>
+        <h1 id="progress-title" className="text-2xl leading-tight font-bold tracking-tight sm:text-[28px]" aria-live="polite">
+          {running ? "Đang kiểm tra từng cặp thuốc…" : "Không hoàn tất được lần kiểm tra"}
+        </h1>
+        <p className="text-neutral-ink">{running ? "Các cặp có kết quả sẽ hiện ngay bên dưới." : "Hãy thử kiểm tra lại."}</p>
       </div>
       <ol className="flex flex-col gap-2.5">
         {rows.map((r) => {

@@ -51,7 +51,7 @@ function App() {
   const home = (
     <button type="button" onClick={() => go("home")} className="flex items-center gap-2.5">
       <Logo />
-      <span className="text-lg font-bold tracking-tight">DDISafe</span>
+      <span className="text-lg font-bold tracking-tight">DRUG-GUARD AI</span>
     </button>
   );
 
@@ -116,7 +116,7 @@ function App() {
 
       <footer className="border-t bg-card print:hidden">
         <div className="mx-auto flex w-full max-w-[1200px] flex-wrap justify-between gap-2 px-4 py-4 text-sm text-muted-foreground sm:px-6">
-          <span>DDISafe — phát hiện tương tác thuốc bằng AI. Thông tin chỉ mang tính tham khảo.</span>
+          <span>DRUG-GUARD AI — phát hiện tương tác thuốc bằng AI. Thông tin chỉ mang tính tham khảo.</span>
           <a
             href="https://github.com/hoangtrung1801/ddi-detect-agent"
             target="_blank"

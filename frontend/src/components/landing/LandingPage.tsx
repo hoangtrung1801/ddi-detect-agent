@@ -103,7 +103,7 @@ export function LandingPage({ onStart, onOpenCheck, account, logo }: LandingPage
             Các thuốc có tương tác lẫn nhau không?
           </h1>
           <p className="max-w-[36em] text-[clamp(17px,1.7vw,20px)] text-neutral-ink">
-            Nhập tên thuốc hoặc chụp hộp thuốc. DDISafe tra từng cặp, vẽ sơ đồ mức độ nguy hiểm và nói rõ bạn nên làm gì tiếp theo.
+            Nhập tên thuốc hoặc chụp hộp thuốc. DRUG-GUARD AI tra từng cặp, vẽ sơ đồ mức độ nguy hiểm và nói rõ bạn nên làm gì tiếp theo.
           </p>
           <form onSubmit={submit} className="flex w-full max-w-[600px] flex-col gap-2 text-left">
             <label htmlFor="landing-drugs" className="text-sm font-semibold">
@@ -252,8 +252,8 @@ export function LandingPage({ onStart, onOpenCheck, account, logo }: LandingPage
             </h2>
             <p className="text-neutral-ink">Quyết định dùng thuốc vẫn thuộc về bác sĩ và dược sĩ của bạn.</p>
           </div>
-          <LimitList title="DDISafe giúp bạn" good items={["Biết cặp thuốc nào cần chú ý", "Chuẩn bị câu hỏi trước khi đi khám", "In kết quả mang theo cho bác sĩ"]} />
-          <LimitList title="DDISafe không thay thế" items={["Chẩn đoán hay kê đơn", "Tự ý ngừng hoặc đổi thuốc", "Cấp cứu: gọi 115 ngay"]} />
+          <LimitList title="DRUG-GUARD AI giúp bạn" good items={["Biết cặp thuốc nào cần chú ý", "Chuẩn bị câu hỏi trước khi đi khám", "In kết quả mang theo cho bác sĩ"]} />
+          <LimitList title="DRUG-GUARD AI không thay thế" items={["Chẩn đoán hay kê đơn", "Tự ý ngừng hoặc đổi thuốc", "Cấp cứu: gọi 115 ngay"]} />
         </div>
       </section>
 

@@ -1,7 +1,8 @@
 import { ChevronDown, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { KIND_META, linkPriority, linkSourceLabel, type DrugProfile, type LinkInfo } from "@/lib/report";
+import { KIND_META, linkPriority, linkSourceLabel, type DrugProfile, type EvidenceSource, type LinkInfo } from "@/lib/report";
+import { buildCiteIndex, Cite, CiteProvider, SourceList } from "./Evidence";
 import { AiTag, DrugProfiles, PairAnalysisView } from "./PairInsight";
 import type { DisplayPair } from "./types";
 
@@ -12,11 +13,13 @@ interface PairCardProps {
   links: Record<string, LinkInfo>;
   /** Pharmacology profiles by database name. */
   profiles?: Record<string, DrugProfile>;
+  /** Evidence cited in the report, by id. */
+  evidence?: Record<string, EvidenceSource>;
   onFixDrug?: () => void;
 }
 
 /** One pair in plain language: the answer on the header, what happens and the source data when opened. */
-export function PairCard({ pair, open, onToggle, links, profiles = {}, onFixDrug }: PairCardProps) {
+export function PairCard({ pair, open, onToggle, links, profiles = {}, evidence = {}, onFixDrug }: PairCardProps) {
   const meta = KIND_META[pair.kind];
   const pendingInteraction = pair.pending && pair.status === "interaction";
   const ingredientPairs = pair.ingredientPairs ?? [];
@@ -30,6 +33,11 @@ export function PairCard({ pair, open, onToggle, links, profiles = {}, onFixDrug
     .map((n) => profiles[n])
     .filter((p): p is DrugProfile => !!p);
   const analysis = !pair.pending && pair.status === "interaction" ? pair.analysis : undefined;
+  const detailUrls = new Set(details.map((d) => d.url));
+  const ddinterIds = Object.values(evidence)
+    .filter((s) => s.kind === "ddinter" && detailUrls.has(s.url))
+    .map((s) => s.id);
+  const cites = buildCiteIndex(evidence, analysis, pair.status === "interaction" ? pairProfiles : [], ddinterIds);
   const bodyId = `pair-body-${pair.id.replace(/\W/g, "_")}`;
 
   return (
@@ -76,6 +84,7 @@ export function PairCard({ pair, open, onToggle, links, profiles = {}, onFixDrug
       </h3>
 
       {open && (
+        <CiteProvider index={cites}>
         <div id={bodyId} className="flex flex-col gap-4 border-t px-4 pt-4 pb-5 sm:px-5" aria-live="polite">
           <div className="flex flex-col gap-1">
             <h4 className="text-[13px] font-bold text-neutral-ink">{pair.status === "interaction" ? "Tóm tắt" : "Điều gì xảy ra"}</h4>
@@ -101,7 +110,10 @@ export function PairCard({ pair, open, onToggle, links, profiles = {}, onFixDrug
               </h4>
               {analysis?.management_vi ? (
                 <>
-                  <p className="text-sm leading-relaxed">{analysis.management_vi}</p>
+                  <p className="text-sm leading-relaxed">
+                    {analysis.management_vi}
+                    <Cite ids={ddinterIds} />
+                  </p>
                   <details className="text-xs text-muted-foreground">
                     <summary className="cursor-pointer font-semibold">Nguyên văn tiếng Anh</summary>
                     {management.map((m) => (
@@ -148,6 +160,8 @@ export function PairCard({ pair, open, onToggle, links, profiles = {}, onFixDrug
               </Button>
             </div>
           )}
+
+          {!pair.pending && <SourceList index={cites} />}
 
           {!pair.pending && details.length > 0 && (
             <details className="max-w-[80ch] rounded-xl border px-4 py-3 text-sm">
@@ -208,6 +222,7 @@ export function PairCard({ pair, open, onToggle, links, profiles = {}, onFixDrug
             ))}
           </div>
         </div>
+        </CiteProvider>
       )}
     </article>
   );

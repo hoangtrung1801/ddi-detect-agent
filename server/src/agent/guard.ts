@@ -5,6 +5,7 @@ import {
   InteractionReportSchema,
   DISCLAIMER_VI,
   type DrugProfile,
+  type EvidenceSource,
   type InteractionReport,
   type PairAnalysis,
   type ReportDraft,
@@ -28,21 +29,74 @@ function fixedExplanation(p: PairResult): string {
   return `Không có dữ liệu: cơ sở dữ liệu không ghi nhận tương tác giữa ${p.a} và ${p.b}.${scope} Điều này không đồng nghĩa với an toàn; hãy hỏi bác sĩ hoặc dược sĩ.`;
 }
 
-const trimList = (l: string[]) => l.map((s) => s.trim()).filter(Boolean);
+/** Keeps only citations of sources registered in this run; an item that cites nothing valid is dropped. */
+class Citations {
+  readonly #known: Map<string, EvidenceSource>;
+  constructor(known: Map<string, EvidenceSource>) {
+    this.#known = known;
+  }
+  ids(list: string[]): string[] {
+    return [...new Set(list.map((s) => s.trim().replace(/^\[|\]$/g, '').toUpperCase()))].filter((id) => this.#known.has(id));
+  }
+  item<T extends { text: string; sources: string[] }>(x: T | undefined): T | undefined {
+    if (!x) return undefined;
+    const text = x.text.trim();
+    const sources = this.ids(x.sources);
+    return text && sources.length ? { ...x, text, sources } : undefined;
+  }
+  list<T extends { text: string; sources: string[] }>(l: T[]): T[] {
+    return l.map((x) => this.item(x)).filter((x): x is T => x !== undefined);
+  }
+}
 
-function cleanAnalysis(a: PairAnalysis): PairAnalysis {
-  const management = a.management_vi?.trim();
-  const onset = a.onset?.trim();
+function cleanAnalysis(a: PairAnalysis, c: Citations, hasManagement: boolean): PairAnalysis | undefined {
+  const why = a.why_harmful.trim();
+  const whySources = c.ids(a.why_harmful_sources);
+  if (!why || !whySources.length) return undefined; // an unsourced explanation is not shown at all
+  const chain = a.chain
+    .map((s) => ({ actor: s.actor.trim(), effect: s.effect.trim(), sources: c.ids(s.sources) }))
+    .filter((s) => s.actor && s.effect && s.sources.length);
+  const onset = c.item(a.onset);
+  const management = hasManagement ? a.management_vi?.trim() : undefined;
   return {
     mechanism_type: a.mechanism_type,
-    why_harmful: a.why_harmful.trim(),
-    chain: a.chain.filter((c) => c.actor.trim() && c.effect.trim()),
-    consequences: trimList(a.consequences),
-    risk_factors: trimList(a.risk_factors),
-    monitoring: trimList(a.monitoring),
+    why_harmful: why,
+    why_harmful_sources: whySources,
+    chain: chain.length >= 2 ? chain : [],
+    consequences: c.list(a.consequences),
+    risk_factors: c.list(a.risk_factors),
+    monitoring: c.list(a.monitoring),
     ...(onset ? { onset } : {}),
     ...(management ? { management_vi: management } : {}),
   };
+}
+
+function cleanProfile(p: DrugProfile, name: string, c: Citations): DrugProfile | undefined {
+  const mechanism = c.item(p.mechanism);
+  const role = c.item(p.interaction_role);
+  if (!mechanism || !role) return undefined;
+  const pk = c.item(p.pharmacokinetics);
+  return {
+    name,
+    drug_class: p.drug_class.trim(),
+    mechanism,
+    indications: c.list(p.indications),
+    ...(pk ? { pharmacokinetics: pk } : {}),
+    adverse_effects: c.list(p.adverse_effects),
+    interaction_role: role,
+  };
+}
+
+/** Every source id cited anywhere in a value. */
+function citedIds(v: unknown, out = new Set<string>()): Set<string> {
+  if (Array.isArray(v)) v.forEach((x) => citedIds(x, out));
+  else if (v && typeof v === 'object') {
+    for (const [k, x] of Object.entries(v)) {
+      if ((k === 'sources' || k === 'why_harmful_sources') && Array.isArray(x)) x.forEach((id) => out.add(String(id)));
+      else citedIds(x, out);
+    }
+  }
+  return out;
 }
 
 /** Blocks submit_report until check_interactions has produced pair results for this request. */
@@ -76,6 +130,7 @@ export async function buildReport(draft: ReportDraft, ctx: RunContext): Promise<
     if (la && lb && la !== lb) draftBy.set(pairKey(la, lb), p); // pairs that do not exist are dropped
   }
 
+  const cite = new Citations(ctx.sources);
   const pairs: ReportPair[] = ctx.pairs.map((r) => {
     const d = draftBy.get(pairKey(r.a, r.b));
     const base = { a: r.a, b: r.b, status: r.status as PairStatus };
@@ -86,8 +141,10 @@ export async function buildReport(draft: ReportDraft, ctx: RunContext): Promise<
         ...(r.sourceRecords?.length ? { source_records: r.sourceRecords, severity_source: 'DDInter 2.0' as const } : {}),
         ...(r.ingredientPairs?.length ? { ingredient_pairs: r.ingredientPairs.map(({ a, b, condition }) => ({ a, b, condition })) } : {}),
         explanation: d?.explanation?.trim() || `Cơ sở dữ liệu ghi nhận: ${r.condition}`,
-        ...(d?.analysis && d.analysis.why_harmful.trim() ? { analysis: cleanAnalysis(d.analysis) } : {}),
       };
+      const hasManagement = (r.sourceRecords ?? []).some((x) => x.details?.some((dd) => dd.management));
+      const analysis = d?.analysis ? cleanAnalysis(d.analysis, cite, hasManagement) : undefined;
+      if (analysis) out.analysis = analysis;
       if (r.sourceRecords?.length) {
         if (r.sourceSeverity) out.severity = r.sourceSeverity;
       } else if (d?.severity) {
@@ -127,8 +184,13 @@ export async function buildReport(draft: ReportDraft, ctx: RunContext): Promise<
   for (const prof of draft.drug_profiles ?? []) {
     const key = normName(labelOf.get(normName(prof.name)) ?? ctx.deps.drugDb.getDrug(prof.name)?.name ?? prof.name);
     const name = involved.get(key);
-    if (name && !drugProfiles[name] && prof.mechanism.trim()) drugProfiles[name] = { ...prof, name };
+    const clean = name && !drugProfiles[name] ? cleanProfile(prof, name, cite) : undefined;
+    if (name && clean) drugProfiles[name] = clean;
   }
+  // Cited sources, plus the DDInter pages behind every interaction (shown as the pair's source data).
+  const used = citedIds([pairs, drugProfiles]);
+  for (const s of ctx.sources.values()) if (s.kind === 'ddinter') used.add(s.id);
+  const sources = Object.fromEntries([...ctx.sources.values()].filter((s) => used.has(s.id)).map((s) => [s.id, s]));
 
   const report: InteractionReport = {
     title: draft.title.trim() || 'Kết quả kiểm tra tương tác thuốc',
@@ -138,6 +200,7 @@ export async function buildReport(draft: ReportDraft, ctx: RunContext): Promise<
     recommendations: draft.recommendations.map((s) => s.trim()).filter(Boolean),
     links,
     ...(Object.keys(drugProfiles).length ? { drug_profiles: drugProfiles } : {}),
+    ...(Object.keys(sources).length ? { sources } : {}),
     disclaimer: DISCLAIMER_VI,
   };
   if (!Value.Check(InteractionReportSchema, report)) {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Printer, Save } from "lucide-react";
+import { FileDown, Loader2, Printer, Save } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { InteractionReport, PairResult, ResolvedDrug } from "@/lib/report";
@@ -38,6 +39,38 @@ export function ResultsPanel({ drugs, pairs, report, running, steps, resolved, l
   const [openId, setOpenId] = useState<string | null | undefined>(undefined);
   const [view, setView] = useState<"list" | "grid">("list");
   const [scrollTo, setScrollTo] = useState<string | null>(null);
+  const [bigText, setBigText] = useState(() => {
+    try {
+      return localStorage.getItem("dg-big-text") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [exporting, setExporting] = useState(false);
+
+  const toggleBigText = () =>
+    setBigText((v) => {
+      try {
+        localStorage.setItem("dg-big-text", v ? "0" : "1");
+      } catch {
+        /* per-viewer convenience only */
+      }
+      return !v;
+    });
+
+  const downloadPdf = async () => {
+    if (!report) return;
+    setExporting(true);
+    try {
+      const { exportReportPdf } = await import("./exportPdf");
+      await exportReportPdf({ report, pairs, drugs, unresolved });
+    } catch (err) {
+      console.error(err);
+      toast.error("Không tạo được PDF. Hãy thử lại hoặc dùng nút In.");
+    } finally {
+      setExporting(false);
+    }
+  };
   // A pair from an older run falls back to the most serious one too.
   const open = openId === null || pairs.some((p) => p.id === openId) ? openId! : (pairs[0]?.id ?? null);
 
@@ -55,9 +88,9 @@ export function ResultsPanel({ drugs, pairs, report, running, steps, resolved, l
 
   return (
     <div className="flex flex-wrap items-start gap-5">
-      <div className={cn("flex min-w-0 flex-[999_1_620px] flex-col gap-5", stale && "opacity-60")}>
+      <div className={cn("flex min-w-0 flex-[999_1_620px] flex-col gap-5", stale && "opacity-60")} style={bigText ? { zoom: 1.18 } : undefined}>
         {report ? (
-          <Verdict report={report} pairs={pairs} unresolved={unresolved} onOpenPair={openPair} onFixDrug={onFixDrug} />
+          <Verdict report={report} pairs={pairs} unresolved={unresolved} onOpenPair={openPair} onFixDrug={onFixDrug} bigText={bigText} onToggleBigText={toggleBigText} onDownloadPdf={downloadPdf} exporting={exporting} />
         ) : (
           <AnalysisProgress steps={steps} running={running} resolved={resolved} pairs={livePairs} />
         )}
@@ -91,6 +124,7 @@ export function ResultsPanel({ drugs, pairs, report, running, steps, resolved, l
                 onToggle={() => setOpenId(p.id === open ? null : p.id)}
                 links={report?.links ?? {}}
                 profiles={report?.drug_profiles}
+                evidence={report?.sources}
                 onFixDrug={onFixDrug}
               />
             ))}
@@ -109,6 +143,10 @@ export function ResultsPanel({ drugs, pairs, report, running, steps, resolved, l
               Lưu thuốc vào tủ thuốc
             </Button>
           )}
+          <Button variant="outline" className="h-12 rounded-xl border-foreground bg-card font-semibold" onClick={downloadPdf} disabled={!report || exporting}>
+            {exporting ? <Loader2 className="animate-spin" aria-hidden="true" /> : <FileDown aria-hidden="true" />}
+            {exporting ? "Đang tạo PDF…" : "Tải báo cáo PDF (kèm nguồn)"}
+          </Button>
           <Button variant="outline" className="h-11 rounded-xl bg-card font-semibold" onClick={() => window.print()} disabled={!report}>
             <Printer aria-hidden="true" />
             In để mang tới bác sĩ

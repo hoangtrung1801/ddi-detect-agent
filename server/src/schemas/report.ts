@@ -52,41 +52,71 @@ export const SourceInteractionSchema = Type.Object({
   details: Type.Optional(Type.Array(InteractionDetailSchema)),
 });
 
-/** AI-written Vietnamese pharmacology for an INTERACTION pair: why the combination is harmful. General knowledge, not source data. */
+const Sources = (what: string) =>
+  Type.Array(Type.String(), { maxItems: 6, description: `At least one evidence source id (e.g. "S2") from check_interactions that support ${what}` });
+
+const Cited = (what: string) =>
+  Type.Object({ text: Type.String({ description: `Vietnamese ${what}` }), sources: Sources('this item') });
+
+export const OrganSchema = Type.Union(
+  ['brain', 'eye', 'heart', 'lungs', 'liver', 'gi', 'kidney', 'blood', 'muscle', 'skin', 'other'].map((o) => Type.Literal(o)),
+  { description: 'Body system mainly affected: gi = stomach/intestines, blood = bleeding/blood cells/clotting' },
+);
+
+/** A citable source registered by code (DDInter pages, their literature, FDA labels). The model cites ids only. */
+export const EvidenceSourceSchema = Type.Object({
+  id: Type.String(),
+  kind: Type.Union([Type.Literal('ddinter'), Type.Literal('fda-label'), Type.Literal('literature')]),
+  title: Type.String(),
+  url: Type.String(),
+  publisher: Type.String(),
+  /** direct = the exact page; search = a PubMed search for a citation without PMID/DOI. */
+  link: Type.Union([Type.Literal('direct'), Type.Literal('search')]),
+  drug: Type.Optional(Type.String()),
+  retrievedAt: Type.Optional(Type.String()),
+});
+export type EvidenceSource = Static<typeof EvidenceSourceSchema>;
+
+/** AI-written Vietnamese pharmacology for an INTERACTION pair: why the combination is harmful. Every claim cites evidence ids. */
 export const PairAnalysisSchema = Type.Object({
   mechanism_type: Type.Union([Type.Literal('pharmacodynamic'), Type.Literal('pharmacokinetic'), Type.Literal('mixed'), Type.Literal('unknown')], {
     description: 'pharmacodynamic = additive/opposing effects on the same target or system; pharmacokinetic = one drug changes absorption, metabolism (e.g. CYP450), transport or excretion of the other; mixed = both',
   }),
   why_harmful: Type.String({
     description:
-      'Detailed Vietnamese explanation (4-7 sentences) of WHY this combination is harmful: what each drug does in the body, which pathway/enzyme/receptor/organ they share, how the effects add up or one changes the level of the other, and the resulting clinical danger. Plain language a patient can follow, with medical terms explained in parentheses.',
+      'Detailed Vietnamese explanation (4-7 sentences, 2-3 short paragraphs separated by a blank line) of WHY this combination is harmful: what each drug does, the shared pathway/enzyme/receptor/organ, how effects add up or one changes the level of the other, and the clinical danger. Medical terms explained in parentheses. Only claims supported by the cited sources.',
   }),
+  why_harmful_sources: Sources('why_harmful'),
   chain: Type.Array(
     Type.Object({
-      actor: Type.String({ description: 'Who acts in this step: a drug name from the pair, or "Khi dùng chung" for the combined result' }),
-      effect: Type.String({ description: 'Short Vietnamese effect (max ~15 words), e.g. "Ức chế vitamin K → giảm các yếu tố đông máu II, VII, IX, X"' }),
+      actor: Type.String({ description: 'A drug name from the pair, or "Khi dùng chung" for the combined result' }),
+      effect: Type.String({ description: 'Short Vietnamese effect (max ~15 words)' }),
+      sources: Sources('this step'),
     }),
-    { minItems: 2, maxItems: 5, description: 'Mechanism chain: one step per drug, then the combined result last' },
+    { maxItems: 5, description: 'Mechanism chain (2-5 steps): one step per drug, then the combined result last' },
   ),
-  consequences: Type.Array(Type.String(), { maxItems: 6, description: 'Vietnamese clinical consequences / warning signs (short phrases)' }),
-  risk_factors: Type.Array(Type.String(), { maxItems: 5, description: 'Vietnamese: who is at higher risk (elderly, kidney/liver disease, high dose, ...)' }),
-  monitoring: Type.Array(Type.String(), { maxItems: 5, description: 'Vietnamese: what to monitor (lab tests such as INR, symptoms). No dose changes.' }),
-  onset: Type.Optional(Type.String({ description: 'Vietnamese: when the effect usually appears, if generally known' })),
+  consequences: Type.Array(
+    Type.Object({ text: Type.String({ description: 'Vietnamese clinical consequence / warning sign (short)' }), organ: OrganSchema, sources: Sources('this consequence') }),
+    { maxItems: 6 },
+  ),
+  risk_factors: Type.Array(Cited('risk factor: who is at higher risk'), { maxItems: 5 }),
+  monitoring: Type.Array(Cited('item to monitor (lab test or symptom); no dose changes'), { maxItems: 5 }),
+  onset: Type.Optional(Cited('when the effect usually appears')),
   management_vi: Type.Optional(
-    Type.String({ description: 'Faithful Vietnamese translation of the DDInter "Management (source quote)" when one was provided; omit when the source has none' }),
+    Type.String({ description: 'Faithful Vietnamese translation of the DDInter management text when one was provided; omit otherwise' }),
   ),
 });
 export type PairAnalysis = Static<typeof PairAnalysisSchema>;
 
-/** AI-written Vietnamese pharmacology profile of one active ingredient involved in an interaction. */
+/** AI-written Vietnamese pharmacology profile of one active ingredient, grounded in its cited label/sources. */
 export const DrugProfileSchema = Type.Object({
   name: Type.String({ description: 'Database name of the active ingredient (as in check_interactions)' }),
-  drug_class: Type.String({ description: 'Vietnamese pharmacological class, e.g. "Thuốc chống đông kháng vitamin K"' }),
-  mechanism: Type.String({ description: 'Vietnamese mechanism of action, 1-3 sentences' }),
-  indications: Type.Array(Type.String(), { maxItems: 4, description: 'Vietnamese main uses' }),
-  pharmacokinetics: Type.String({ description: 'Vietnamese key pharmacokinetics: absorption, metabolism (CYP enzymes), half-life, elimination; 1-3 sentences' }),
-  adverse_effects: Type.Array(Type.String(), { maxItems: 5, description: 'Vietnamese notable adverse effects' }),
-  interaction_role: Type.String({ description: 'Vietnamese: the property of this drug that drives the interaction(s) in this report, 1 sentence' }),
+  drug_class: Type.String({ description: 'Vietnamese pharmacological class' }),
+  mechanism: Cited('mechanism of action, 1-3 sentences'),
+  indications: Type.Array(Cited('main use'), { maxItems: 4 }),
+  pharmacokinetics: Type.Optional(Cited('key pharmacokinetics: absorption, metabolism enzymes, half-life, elimination; 1-3 sentences')),
+  adverse_effects: Type.Array(Cited('notable adverse effect'), { maxItems: 5 }),
+  interaction_role: Cited('property of this drug that drives the interaction(s) in this report, 1 sentence'),
 });
 export type DrugProfile = Static<typeof DrugProfileSchema>;
 
@@ -123,6 +153,8 @@ export const InteractionReportSchema = Type.Object({
   links: Type.Record(Type.String(), LinkSchema),
   /** Pharmacology profiles of the active ingredients involved in INTERACTION pairs, keyed by database name. AI interpretation. */
   drug_profiles: Type.Optional(Type.Record(Type.String(), DrugProfileSchema)),
+  /** Evidence cited anywhere in the report, by id. */
+  sources: Type.Optional(Type.Record(Type.String(), EvidenceSourceSchema)),
   disclaimer: Type.String(),
 });
 export type InteractionReport = Static<typeof InteractionReportSchema>;

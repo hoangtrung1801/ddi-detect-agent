@@ -3,7 +3,8 @@ import type { LinkInfo } from '../domain/links.ts';
 import { ingredientVariants, type ResolvedDrug, type Resolver } from '../domain/resolver.ts';
 import type { PairStatus } from '../domain/risk.ts';
 import { normName } from '../util/norm.ts';
-import type { InteractionReport } from '../schemas/report.ts';
+import type { DrugLabel } from '../domain/drug-labels.ts';
+import type { EvidenceSource, InteractionReport } from '../schemas/report.ts';
 import type { ProgressSink } from './progress.ts';
 
 /** One requested drug. A product (e.g. a supplement read from a photo) lists its ingredients; a plain drug has none. */
@@ -41,6 +42,8 @@ export interface AgentDeps {
   resolver: Resolver;
   /** Reference link lookup: Long Châu, then drugs.com (cached, never throws). */
   linkFn: (dbName: string) => Promise<LinkInfo>;
+  /** FDA label lookup for evidence (cached, never throws). Optional: without it profiles can only cite DDInter. */
+  labelFn?: (dbName: string) => Promise<DrugLabel | null>;
 }
 
 /** Per-request state shared by the tools and the guard. Never shared across requests. */
@@ -50,6 +53,8 @@ export class RunContext {
   readonly #byInput = new Map<string, ResolvedDrug>();
   pairs: PairResult[] | null = null;
   links: Record<string, LinkInfo> = {};
+  /** Citable evidence registered for this run, by id (S1, S2, ...). */
+  readonly sources = new Map<string, EvidenceSource>();
   /** Set by submit_report once the merged report passed validation. */
   report: InteractionReport | undefined;
   readonly products: Product[];
@@ -122,6 +127,14 @@ export class RunContext {
       alternatives: [],
       ingredients: members,
     };
+  }
+
+  /** Register a source once (by URL and title) and return it with its id. */
+  addSource(s: Omit<EvidenceSource, 'id'>): EvidenceSource {
+    for (const x of this.sources.values()) if (x.url === s.url && x.title === s.title) return x;
+    const src = { id: `S${this.sources.size + 1}`, ...s };
+    this.sources.set(src.id, src);
+    return src;
   }
 
   addResolved(r: ResolvedDrug): void {

@@ -1,16 +1,21 @@
-import { Activity, AlertTriangle, ArrowDown, ArrowRight, Clock, FlaskConical, Pill, Sparkles, Stethoscope, Target, Users } from "lucide-react";
 import type { ReactNode } from "react";
+import { Activity, AlertTriangle, ArrowDown, ArrowRight, Clock, FlaskConical, Pill, Sparkles, Stethoscope, Target, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { KIND_META, MECHANISM_LABEL, type DrugProfile, type PairAnalysis, type PairKind } from "@/lib/report";
+import { KIND_META, MECHANISM_LABEL, type Cited, type DrugProfile, type PairAnalysis, type PairKind } from "@/lib/report";
+import { BodyMap } from "./BodyMap";
+import { Cite } from "./Evidence";
 
 const COMBINED = /dùng chung|kết hợp|phối hợp/i;
 
-/** Shows that the pharmacology below is AI interpretation, not database content. */
+/** Shows that the text is written by AI from the cited sources, not copied from them. */
 export function AiTag() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-neutral-ink">
+    <span
+      title="Do AI viết lại bằng tiếng Việt từ các nguồn được đánh số; bấm số để mở nguồn gốc."
+      className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-neutral-ink"
+    >
       <Sparkles className="size-3" aria-hidden="true" />
-      AI tổng hợp
+      AI tổng hợp từ nguồn
     </span>
   );
 }
@@ -24,17 +29,15 @@ function MechanismChain({ chain, kind }: { chain: PairAnalysis["chain"]; kind: P
         const result = i === chain.length - 1 && (COMBINED.test(step.actor) || chain.length > 2);
         return (
           <li key={i} className="flex flex-col items-center gap-1.5 sm:flex-1 sm:flex-row">
-            <div
-              className={cn(
-                "flex w-full flex-1 flex-col gap-1 self-stretch rounded-xl border px-3.5 py-3",
-                result ? meta.soft : "bg-card",
-              )}
-            >
+            <div className={cn("flex w-full flex-1 flex-col gap-1 self-stretch rounded-xl border px-3.5 py-3", result ? meta.soft : "bg-card")}>
               <span className={cn("text-xs font-bold tracking-wide uppercase", result ? "" : "text-brand-ink")}>
                 {result ? <AlertTriangle className="mr-1 inline size-3.5 align-[-2px]" aria-hidden="true" /> : <Pill className="mr-1 inline size-3.5 align-[-2px]" aria-hidden="true" />}
                 {step.actor}
               </span>
-              <span className={cn("text-sm leading-snug", result && "font-semibold")}>{step.effect}</span>
+              <span className={cn("text-sm leading-snug", result && "font-semibold")}>
+                {step.effect}
+                <Cite ids={step.sources} />
+              </span>
             </div>
             {i < chain.length - 1 && (
               <>
@@ -49,7 +52,7 @@ function MechanismChain({ chain, kind }: { chain: PairAnalysis["chain"]; kind: P
   );
 }
 
-function FactList({ icon: Icon, title, items, tone }: { icon: typeof Activity; title: string; items: string[]; tone: string }) {
+function FactList({ icon: Icon, title, items, tone }: { icon: typeof Activity; title: string; items: Cited[]; tone: string }) {
   if (!items.length) return null;
   return (
     <div className="flex flex-col gap-2 rounded-xl border bg-card px-3.5 py-3">
@@ -59,9 +62,12 @@ function FactList({ icon: Icon, title, items, tone }: { icon: typeof Activity; t
       </h5>
       <ul className="flex flex-col gap-1.5 text-sm leading-snug">
         {items.map((t) => (
-          <li key={t} className="flex gap-2">
+          <li key={t.text} className="flex gap-2">
             <span className={cn("mt-[7px] size-1.5 shrink-0 rounded-full bg-current", tone)} aria-hidden="true" />
-            <span>{t}</span>
+            <span>
+              {t.text}
+              <Cite ids={t.sources} />
+            </span>
           </li>
         ))}
       </ul>
@@ -69,9 +75,10 @@ function FactList({ icon: Icon, title, items, tone }: { icon: typeof Activity; t
   );
 }
 
-/** Why the pair is harmful: mechanism flow, the detailed reason, consequences, who is at risk and what to watch. */
+/** Why the pair is harmful: mechanism flow, the detailed reason, the body map, who is at risk and what to watch. */
 export function PairAnalysisView({ analysis, kind }: { analysis: PairAnalysis; kind: PairKind }) {
   const mech = MECHANISM_LABEL[analysis.mechanism_type];
+  const paragraphs = analysis.why_harmful.split(/\n\s*\n/).filter((p) => p.trim());
   return (
     <section className="flex flex-col gap-3.5" aria-label="Vì sao cặp thuốc này có hại">
       <div className="flex flex-wrap items-center gap-2">
@@ -84,20 +91,37 @@ export function PairAnalysisView({ analysis, kind }: { analysis: PairAnalysis; k
 
       {analysis.chain.length >= 2 && <MechanismChain chain={analysis.chain} kind={kind} />}
 
-      <p className="max-w-[78ch] leading-relaxed whitespace-pre-line">{analysis.why_harmful}</p>
+      <div className="flex max-w-[78ch] flex-col gap-2.5 leading-relaxed">
+        {paragraphs.map((p, i) => (
+          <p key={i}>
+            {p.trim()}
+            {i === paragraphs.length - 1 && <Cite ids={analysis.why_harmful_sources} />}
+          </p>
+        ))}
+      </div>
 
       {analysis.onset && (
         <p className="flex items-start gap-2 text-sm text-neutral-ink">
           <Clock className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span>
             <span className="font-semibold">Thời điểm xuất hiện: </span>
-            {analysis.onset}
+            {analysis.onset.text}
+            <Cite ids={analysis.onset.sources} />
           </span>
         </p>
       )}
 
+      {analysis.consequences.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h5 className="flex items-center gap-1.5 text-[13px] font-bold text-sev-major-ink">
+            <AlertTriangle className="size-4" aria-hidden="true" />
+            Hậu quả có thể gặp, theo cơ quan
+          </h5>
+          <BodyMap consequences={analysis.consequences} severe={kind === "major"} />
+        </div>
+      )}
+
       <div className="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-2.5">
-        <FactList icon={AlertTriangle} title="Hậu quả có thể gặp" items={analysis.consequences} tone="text-sev-major-ink" />
         <FactList icon={Users} title="Ai dễ gặp nguy cơ hơn" items={analysis.risk_factors} tone="text-sev-moderate-ink" />
         <FactList icon={Activity} title="Cần theo dõi" items={analysis.monitoring} tone="text-brand-ink" />
       </div>
@@ -117,12 +141,13 @@ function ProfileRow({ icon: Icon, label, children }: { icon: typeof Activity; la
   );
 }
 
-function Chips({ items }: { items: string[] }) {
+function Chips({ items }: { items: Cited[] }) {
   return (
     <span className="mt-0.5 flex flex-wrap gap-1.5">
       {items.map((t) => (
-        <span key={t} className="rounded-md bg-muted px-2 py-0.5 text-[13px]">
-          {t}
+        <span key={t.text} className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[13px]">
+          {t.text}
+          <Cite ids={t.sources} />
         </span>
       ))}
     </span>
@@ -138,16 +163,20 @@ export function DrugProfileCard({ profile }: { profile: DrugProfile }) {
         <span className="w-fit rounded-md bg-brand-soft px-2 py-0.5 text-xs font-bold text-brand-ink">{profile.drug_class}</span>
       </header>
       <ProfileRow icon={Target} label="Cơ chế tác dụng">
-        {profile.mechanism}
+        {profile.mechanism.text}
+        <Cite ids={profile.mechanism.sources} />
       </ProfileRow>
       {profile.indications.length > 0 && (
         <ProfileRow icon={Stethoscope} label="Chỉ định chính">
           <Chips items={profile.indications} />
         </ProfileRow>
       )}
-      <ProfileRow icon={FlaskConical} label="Dược động học">
-        {profile.pharmacokinetics}
-      </ProfileRow>
+      {profile.pharmacokinetics && (
+        <ProfileRow icon={FlaskConical} label="Dược động học">
+          {profile.pharmacokinetics.text}
+          <Cite ids={profile.pharmacokinetics.sources} />
+        </ProfileRow>
+      )}
       {profile.adverse_effects.length > 0 && (
         <ProfileRow icon={AlertTriangle} label="Tác dụng phụ đáng chú ý">
           <Chips items={profile.adverse_effects} />
@@ -155,7 +184,8 @@ export function DrugProfileCard({ profile }: { profile: DrugProfile }) {
       )}
       <p className="rounded-lg border-l-4 border-sev-major bg-sev-major-soft/60 px-3 py-2 text-sm leading-snug">
         <span className="font-bold text-sev-major-ink">Vai trò trong tương tác: </span>
-        {profile.interaction_role}
+        {profile.interaction_role.text}
+        <Cite ids={profile.interaction_role.sources} />
       </p>
     </article>
   );

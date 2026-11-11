@@ -1,6 +1,7 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { computePairs, type PairResult, type RunContext } from '../context.ts';
+import { gatherEvidence } from '../evidence.ts';
 
 const Params = Type.Object({
   drugs: Type.Array(Type.String(), {
@@ -54,8 +55,9 @@ export function makeCheckInteractionsTool(ctx: RunContext): AgentTool<typeof Par
       if (pairs.length === 0) throw new Error('At least two distinct drugs are needed to check interactions.');
       ctx.pairs = pairs;
       ctx.emit({ type: 'pairs', pairs });
+      const evidence = await gatherEvidence(ctx, pairs);
       return {
-        content: [{ type: 'text', text: pairs.map(formatPair).join('\n') }],
+        content: [{ type: 'text', text: pairs.map(formatPair).join('\n') + evidence }],
         details: pairs,
       };
     },

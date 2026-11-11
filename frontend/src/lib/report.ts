@@ -51,28 +51,64 @@ export interface SourceInteractionRecord {
 
 export type MechanismType = "pharmacodynamic" | "pharmacokinetic" | "mixed" | "unknown";
 
-/** AI-written Vietnamese pharmacology for an interaction pair: why it is harmful. Not source data. */
+/** A claim with the ids of the evidence that supports it. */
+export interface Cited {
+  text: string;
+  sources: string[];
+}
+
+export type Organ = "brain" | "eye" | "heart" | "lungs" | "liver" | "gi" | "kidney" | "blood" | "muscle" | "skin" | "other";
+
+export const ORGAN_LABEL: Record<Organ, string> = {
+  brain: "Não, thần kinh",
+  eye: "Mắt",
+  heart: "Tim, mạch",
+  lungs: "Phổi",
+  liver: "Gan",
+  gi: "Dạ dày, ruột",
+  kidney: "Thận, tiết niệu",
+  blood: "Máu, đông máu",
+  muscle: "Cơ",
+  skin: "Da",
+  other: "Khác",
+};
+
+/** A citable source registered by the server. */
+export interface EvidenceSource {
+  id: string;
+  kind: "ddinter" | "fda-label" | "literature";
+  title: string;
+  url: string;
+  publisher: string;
+  /** direct = the exact page; search = a PubMed search for a citation without PMID/DOI. */
+  link: "direct" | "search";
+  drug?: string;
+  retrievedAt?: string;
+}
+
+/** AI-written Vietnamese pharmacology for an interaction pair: why it is harmful. Every claim cites evidence. */
 export interface PairAnalysis {
   mechanism_type: MechanismType;
   why_harmful: string;
-  chain: { actor: string; effect: string }[];
-  consequences: string[];
-  risk_factors: string[];
-  monitoring: string[];
-  onset?: string;
+  why_harmful_sources: string[];
+  chain: { actor: string; effect: string; sources: string[] }[];
+  consequences: (Cited & { organ: Organ })[];
+  risk_factors: Cited[];
+  monitoring: Cited[];
+  onset?: Cited;
   /** Vietnamese translation of the DDInter management quote. */
   management_vi?: string;
 }
 
-/** AI-written pharmacology profile of an active ingredient involved in an interaction. */
+/** AI-written pharmacology profile of an active ingredient, grounded in its cited sources. */
 export interface DrugProfile {
   name: string;
   drug_class: string;
-  mechanism: string;
-  indications: string[];
-  pharmacokinetics: string;
-  adverse_effects: string[];
-  interaction_role: string;
+  mechanism: Cited;
+  indications: Cited[];
+  pharmacokinetics?: Cited;
+  adverse_effects: Cited[];
+  interaction_role: Cited;
 }
 
 export const MECHANISM_LABEL: Record<MechanismType, { label: string; hint: string }> = {
@@ -127,6 +163,8 @@ export interface InteractionReport {
   recommendations: string[];
   links: Record<string, LinkInfo>;
   drug_profiles?: Record<string, DrugProfile>;
+  /** Evidence cited anywhere in the report, by id. */
+  sources?: Record<string, EvidenceSource>;
   disclaimer: string;
 }
 

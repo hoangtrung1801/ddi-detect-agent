@@ -57,24 +57,25 @@ describe('DDI agent (scripted model)', () => {
     expect(r.report.overall_risk).toBe('medium');
   });
 
-  it('keeps the pharmacology analysis on interaction pairs and profiles only for interacting drugs', async () => {
-    const env = await makeAgentEnv();
+  it('keeps only cited pharmacology: evidence sources come from code, uncited claims are dropped', async () => {
+    const env = await makeAgentEnv({ labels: true });
+    const c = (text: string, sources: string[]) => ({ text, sources });
     const analysis = {
       mechanism_type: 'pharmacodynamic',
       why_harmful: '  Cả hai thuốc cùng làm giảm khả năng đông máu.  ',
+      why_harmful_sources: ['[S1]', 's2'],
       chain: [
-        { actor: 'Warfarin', effect: 'Ức chế vitamin K' },
-        { actor: 'Ibuprofen', effect: 'Ức chế COX-1 tiểu cầu' },
-        { actor: 'Khi dùng chung', effect: 'Tăng nguy cơ chảy máu' },
-        { actor: ' ', effect: 'bỏ' },
+        { actor: 'Warfarin', effect: 'Ức chế vitamin K', sources: ['S1'] },
+        { actor: 'Ibuprofen', effect: 'Ức chế COX-1 tiểu cầu', sources: ['S2'] },
+        { actor: 'Khi dùng chung', effect: 'Tăng nguy cơ chảy máu', sources: ['S99'] },
       ],
-      consequences: ['Chảy máu dạ dày', ' '],
-      risk_factors: ['Người cao tuổi'],
-      monitoring: ['INR'],
-      management_vi: '  ',
+      consequences: [{ text: 'Chảy máu dạ dày', organ: 'gi', sources: ['S2'] }, { text: 'Bịa', organ: 'brain', sources: [] }],
+      risk_factors: [c('Người cao tuổi', ['S1'])],
+      monitoring: [c('INR', ['S7'])],
+      management_vi: 'Không có nguồn quản lý nên bị bỏ.',
     };
-    const profile = (name: string) => ({
-      name, drug_class: 'Lớp', mechanism: 'Cơ chế', indications: ['A'], pharmacokinetics: 'PK', adverse_effects: ['B'], interaction_role: 'Vai trò',
+    const profile = (name: string, src: string[]) => ({
+      name, drug_class: 'Lớp', mechanism: c('Cơ chế', src), indications: [c('A', src)], adverse_effects: [c('B', [])], interaction_role: c('Vai trò', src),
     });
     env.setResponses([
       call('resolve_drugs', { drugs: [{ input: 'Warfarin' }, { input: 'Ibuprofen' }, { input: 'Digoxin' }] }),
@@ -84,7 +85,7 @@ describe('DDI agent (scripted model)', () => {
           { a: 'Warfarin', b: 'Ibuprofen', severity: 'moderate', explanation: 'Nguy cơ chảy máu.', analysis },
           { a: 'Warfarin', b: 'Digoxin', explanation: 'x', analysis },
         ]),
-        drug_profiles: [profile('warfarin'), profile('Ibuprofen'), profile('Digoxin'), profile('Ibuprofen')],
+        drug_profiles: [profile('warfarin', ['S1']), profile('Ibuprofen', ['S42']), profile('Digoxin', ['S1'])],
       }),
     ]);
     const r = await env.agent.run({ drugs: ['Warfarin', 'Ibuprofen', 'Digoxin'] });
@@ -94,14 +95,34 @@ describe('DDI agent (scripted model)', () => {
     expect(byKey['Warfarin|Ibuprofen']!.analysis).toEqual({
       mechanism_type: 'pharmacodynamic',
       why_harmful: 'Cả hai thuốc cùng làm giảm khả năng đông máu.',
-      chain: analysis.chain.slice(0, 3),
-      consequences: ['Chảy máu dạ dày'],
-      risk_factors: ['Người cao tuổi'],
-      monitoring: ['INR'],
+      why_harmful_sources: ['S1', 'S2'],
+      chain: analysis.chain.slice(0, 2),
+      consequences: [analysis.consequences[0]],
+      risk_factors: [c('Người cao tuổi', ['S1'])],
+      monitoring: [],
     });
     expect(byKey['Warfarin|Digoxin']!.analysis).toBeUndefined();
-    expect(Object.keys(r.report.drug_profiles ?? {}).sort()).toEqual(['Ibuprofen', 'Warfarin']);
-    expect(r.report.drug_profiles!['Warfarin']!.name).toBe('Warfarin');
+    // Ibuprofen cites an unknown id, Digoxin is not in an interaction.
+    expect(Object.keys(r.report.drug_profiles ?? {})).toEqual(['Warfarin']);
+    expect(r.report.drug_profiles!['Warfarin']!.adverse_effects).toEqual([]);
+    expect(Object.keys(r.report.sources ?? {}).sort()).toEqual(['S1', 'S2']);
+    expect(r.report.sources!['S1']).toMatchObject({ kind: 'fda-label', link: 'direct', url: expect.stringContaining('dailymed.nlm.nih.gov') });
+  });
+
+  it('drops the whole analysis when why_harmful cites nothing valid', async () => {
+    const env = await makeAgentEnv();
+    env.setResponses([
+      call('resolve_drugs', { drugs: [{ input: 'Warfarin' }, { input: 'Ibuprofen' }] }),
+      call('check_interactions', { drugs: ['Warfarin', 'Ibuprofen'] }),
+      call('submit_report', draft([{ a: 'Warfarin', b: 'Ibuprofen', explanation: 'x', analysis: {
+        mechanism_type: 'unknown', why_harmful: 'Không nguồn.', why_harmful_sources: ['S1'], chain: [], consequences: [], risk_factors: [], monitoring: [],
+      } }])),
+    ]);
+    const r = await env.agent.run({ drugs: ['Warfarin', 'Ibuprofen'] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.pairs[0]!.analysis).toBeUndefined();
+    expect(r.report.sources).toBeUndefined();
   });
 
   it('model claiming a no_record pair is safe cannot change the status or the wording', async () => {

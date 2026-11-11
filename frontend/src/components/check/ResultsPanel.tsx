@@ -90,6 +90,7 @@ export function ResultsPanel({ drugs, pairs, report, running, steps, resolved, l
                 open={p.id === open}
                 onToggle={() => setOpenId(p.id === open ? null : p.id)}
                 links={report?.links ?? {}}
+                profiles={report?.drug_profiles}
                 onFixDrug={onFixDrug}
               />
             ))}

@@ -49,6 +49,39 @@ export interface SourceInteractionRecord {
   details?: InteractionDetail[];
 }
 
+export type MechanismType = "pharmacodynamic" | "pharmacokinetic" | "mixed" | "unknown";
+
+/** AI-written Vietnamese pharmacology for an interaction pair: why it is harmful. Not source data. */
+export interface PairAnalysis {
+  mechanism_type: MechanismType;
+  why_harmful: string;
+  chain: { actor: string; effect: string }[];
+  consequences: string[];
+  risk_factors: string[];
+  monitoring: string[];
+  onset?: string;
+  /** Vietnamese translation of the DDInter management quote. */
+  management_vi?: string;
+}
+
+/** AI-written pharmacology profile of an active ingredient involved in an interaction. */
+export interface DrugProfile {
+  name: string;
+  drug_class: string;
+  mechanism: string;
+  indications: string[];
+  pharmacokinetics: string;
+  adverse_effects: string[];
+  interaction_role: string;
+}
+
+export const MECHANISM_LABEL: Record<MechanismType, { label: string; hint: string }> = {
+  pharmacodynamic: { label: "Dược lực học", hint: "Hai thuốc cộng hoặc đối kháng tác dụng trên cùng một đích hay hệ cơ quan." },
+  pharmacokinetic: { label: "Dược động học", hint: "Một thuốc làm thay đổi hấp thu, chuyển hoá hoặc thải trừ của thuốc kia." },
+  mixed: { label: "Dược lực + dược động học", hint: "Vừa cộng tác dụng, vừa làm thay đổi nồng độ thuốc trong máu." },
+  unknown: { label: "Cơ chế chưa rõ", hint: "Cơ chế chưa được xác lập đầy đủ." },
+};
+
 export interface ReportPair {
   a: string;
   b: string;
@@ -60,6 +93,7 @@ export interface ReportPair {
   /** Pairs involving a multi-ingredient product: the ingredient pairs the database records. */
   ingredient_pairs?: IngredientPair[];
   explanation: string;
+  analysis?: PairAnalysis;
 }
 
 /** Reference page for a drug. Long Châu is preferred, then drugs.com, then a generic drugs.com search. */
@@ -92,6 +126,7 @@ export interface InteractionReport {
   overall_risk: OverallRisk;
   recommendations: string[];
   links: Record<string, LinkInfo>;
+  drug_profiles?: Record<string, DrugProfile>;
   disclaimer: string;
 }
 

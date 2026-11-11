@@ -1,7 +1,15 @@
 import type { AgentTool, BeforeToolCallContext, BeforeToolCallResult } from '@earendil-works/pi-agent-core';
 import { Value } from 'typebox/value';
 import { overallRisk, type PairStatus, type Severity } from '../domain/risk.ts';
-import { InteractionReportSchema, DISCLAIMER_VI, type InteractionReport, type ReportDraft, type ReportPair } from '../schemas/report.ts';
+import {
+  InteractionReportSchema,
+  DISCLAIMER_VI,
+  type DrugProfile,
+  type InteractionReport,
+  type PairAnalysis,
+  type ReportDraft,
+  type ReportPair,
+} from '../schemas/report.ts';
 import { normName, pairKey } from '../util/norm.ts';
 import { drugLabel, type PairResult, type RunContext } from './context.ts';
 import { collectLinks } from './tools/drug-links.ts';
@@ -18,6 +26,23 @@ function fixedExplanation(p: PairResult): string {
     return `Không xác định: ít nhất một trong hai thuốc (${p.a}, ${p.b}) không khớp được với cơ sở dữ liệu nên chưa kiểm tra được cặp này.${scope} Hãy kiểm tra lại tên thuốc hoặc hỏi dược sĩ.`;
   }
   return `Không có dữ liệu: cơ sở dữ liệu không ghi nhận tương tác giữa ${p.a} và ${p.b}.${scope} Điều này không đồng nghĩa với an toàn; hãy hỏi bác sĩ hoặc dược sĩ.`;
+}
+
+const trimList = (l: string[]) => l.map((s) => s.trim()).filter(Boolean);
+
+function cleanAnalysis(a: PairAnalysis): PairAnalysis {
+  const management = a.management_vi?.trim();
+  const onset = a.onset?.trim();
+  return {
+    mechanism_type: a.mechanism_type,
+    why_harmful: a.why_harmful.trim(),
+    chain: a.chain.filter((c) => c.actor.trim() && c.effect.trim()),
+    consequences: trimList(a.consequences),
+    risk_factors: trimList(a.risk_factors),
+    monitoring: trimList(a.monitoring),
+    ...(onset ? { onset } : {}),
+    ...(management ? { management_vi: management } : {}),
+  };
 }
 
 /** Blocks submit_report until check_interactions has produced pair results for this request. */
@@ -61,6 +86,7 @@ export async function buildReport(draft: ReportDraft, ctx: RunContext): Promise<
         ...(r.sourceRecords?.length ? { source_records: r.sourceRecords, severity_source: 'DDInter 2.0' as const } : {}),
         ...(r.ingredientPairs?.length ? { ingredient_pairs: r.ingredientPairs.map(({ a, b, condition }) => ({ a, b, condition })) } : {}),
         explanation: d?.explanation?.trim() || `Cơ sở dữ liệu ghi nhận: ${r.condition}`,
+        ...(d?.analysis && d.analysis.why_harmful.trim() ? { analysis: cleanAnalysis(d.analysis) } : {}),
       };
       if (r.sourceRecords?.length) {
         if (r.sourceSeverity) out.severity = r.sourceSeverity;
@@ -91,6 +117,19 @@ export async function buildReport(draft: ReportDraft, ctx: RunContext): Promise<
   const links: InteractionReport['links'] = {};
   for (const n of resolvedNames) if (ctx.links[n]) links[n] = ctx.links[n]!;
 
+  // Profiles only for active ingredients that take part in a recorded interaction, keyed by their database name.
+  const involved = new Map<string, string>();
+  for (const p of ctx.pairs) {
+    if (p.status !== 'interaction') continue;
+    for (const n of p.ingredientPairs ? p.ingredientPairs.flatMap((i) => [i.a, i.b]) : [p.a, p.b]) involved.set(normName(n), n);
+  }
+  const drugProfiles: Record<string, DrugProfile> = {};
+  for (const prof of draft.drug_profiles ?? []) {
+    const key = normName(labelOf.get(normName(prof.name)) ?? ctx.deps.drugDb.getDrug(prof.name)?.name ?? prof.name);
+    const name = involved.get(key);
+    if (name && !drugProfiles[name] && prof.mechanism.trim()) drugProfiles[name] = { ...prof, name };
+  }
+
   const report: InteractionReport = {
     title: draft.title.trim() || 'Kết quả kiểm tra tương tác thuốc',
     drugs,
@@ -98,6 +137,7 @@ export async function buildReport(draft: ReportDraft, ctx: RunContext): Promise<
     overall_risk: overallRisk(pairs),
     recommendations: draft.recommendations.map((s) => s.trim()).filter(Boolean),
     links,
+    ...(Object.keys(drugProfiles).length ? { drug_profiles: drugProfiles } : {}),
     disclaimer: DISCLAIMER_VI,
   };
   if (!Value.Check(InteractionReportSchema, report)) {

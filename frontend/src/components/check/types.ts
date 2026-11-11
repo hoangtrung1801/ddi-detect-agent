@@ -1,4 +1,4 @@
-import type { IngredientPair, PairKind, PairStatus, Severity, SourceInteractionRecord } from "@/lib/report";
+import type { IngredientPair, PairAnalysis, PairKind, PairStatus, Severity, SourceInteractionRecord } from "@/lib/report";
 
 /** A pair as the results UI shows it: a finished report pair, or a live one still waiting for the report. */
 export interface DisplayPair {
@@ -14,6 +14,8 @@ export interface DisplayPair {
   sourceRecords?: SourceInteractionRecord[];
   /** Interacting ingredient pairs when a drug is a multi-ingredient product. */
   ingredientPairs?: IngredientPair[];
+  /** AI pharmacology analysis of why the pair is harmful. */
+  analysis?: PairAnalysis;
   /** True while the run is still going and severity/explanation are not known yet. */
   pending: boolean;
 }

@@ -1,7 +1,8 @@
 import { ChevronDown, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { KIND_META, linkPriority, linkSourceLabel, type LinkInfo } from "@/lib/report";
+import { KIND_META, linkPriority, linkSourceLabel, type DrugProfile, type LinkInfo } from "@/lib/report";
+import { AiTag, DrugProfiles, PairAnalysisView } from "./PairInsight";
 import type { DisplayPair } from "./types";
 
 interface PairCardProps {
@@ -9,11 +10,13 @@ interface PairCardProps {
   open: boolean;
   onToggle: () => void;
   links: Record<string, LinkInfo>;
+  /** Pharmacology profiles by database name. */
+  profiles?: Record<string, DrugProfile>;
   onFixDrug?: () => void;
 }
 
 /** One pair in plain language: the answer on the header, what happens and the source data when opened. */
-export function PairCard({ pair, open, onToggle, links, onFixDrug }: PairCardProps) {
+export function PairCard({ pair, open, onToggle, links, profiles = {}, onFixDrug }: PairCardProps) {
   const meta = KIND_META[pair.kind];
   const pendingInteraction = pair.pending && pair.status === "interaction";
   const ingredientPairs = pair.ingredientPairs ?? [];
@@ -23,6 +26,10 @@ export function PairCard({ pair, open, onToggle, links, onFixDrug }: PairCardPro
   const sources = [...new Set([pair.a, pair.b, ...ingredientPairs.flatMap((i) => [i.a, i.b])])]
     .filter((d) => links[d])
     .sort((x, y) => linkPriority(links[x]!) - linkPriority(links[y]!));
+  const pairProfiles = [...new Set(ingredientPairs.length ? ingredientPairs.flatMap((i) => [i.a, i.b]) : [pair.a, pair.b])]
+    .map((n) => profiles[n])
+    .filter((p): p is DrugProfile => !!p);
+  const analysis = !pair.pending && pair.status === "interaction" ? pair.analysis : undefined;
   const bodyId = `pair-body-${pair.id.replace(/\W/g, "_")}`;
 
   return (
@@ -71,11 +78,11 @@ export function PairCard({ pair, open, onToggle, links, onFixDrug }: PairCardPro
       {open && (
         <div id={bodyId} className="flex flex-col gap-4 border-t px-4 pt-4 pb-5 sm:px-5" aria-live="polite">
           <div className="flex flex-col gap-1">
-            <h4 className="text-[13px] font-bold text-neutral-ink">Điều gì xảy ra</h4>
+            <h4 className="text-[13px] font-bold text-neutral-ink">{pair.status === "interaction" ? "Tóm tắt" : "Điều gì xảy ra"}</h4>
             {pair.pending ? (
-              <p className="text-muted-foreground">Đang viết giải thích…</p>
+              <p className="text-muted-foreground">Đang phân tích cơ chế và viết giải thích…</p>
             ) : (
-              <p className="max-w-[72ch] leading-relaxed">{pair.explanation || "Chưa có giải thích cho cặp này."}</p>
+              <p className={cn("max-w-[72ch] leading-relaxed", analysis && "text-[17px] font-semibold")}>{pair.explanation || "Chưa có giải thích cho cặp này."}</p>
             )}
             {pair.status === "no_record" && (
               <p className="max-w-[72ch] text-sm font-semibold text-neutral-ink">
@@ -84,16 +91,37 @@ export function PairCard({ pair, open, onToggle, links, onFixDrug }: PairCardPro
             )}
           </div>
 
+          {analysis && <PairAnalysisView analysis={analysis} kind={pair.kind} />}
+
           {management.length > 0 && !pair.pending && (
             <div className="flex max-w-[80ch] flex-col gap-1.5 rounded-xl bg-brand-soft/50 px-4 py-3.5">
-              <h4 className="text-[13px] font-bold text-brand-ink">Hướng xử trí theo DDInter (tiếng Anh, không phải chỉ định cá nhân)</h4>
-              {management.map((m) => (
-                <p key={m} lang="en" className="text-sm leading-relaxed">
-                  {m}
-                </p>
-              ))}
+              <h4 className="flex flex-wrap items-center gap-2 text-[13px] font-bold text-brand-ink">
+                Hướng xử trí theo DDInter (không phải chỉ định cá nhân)
+                {analysis?.management_vi && <AiTag />}
+              </h4>
+              {analysis?.management_vi ? (
+                <>
+                  <p className="text-sm leading-relaxed">{analysis.management_vi}</p>
+                  <details className="text-xs text-muted-foreground">
+                    <summary className="cursor-pointer font-semibold">Nguyên văn tiếng Anh</summary>
+                    {management.map((m) => (
+                      <p key={m} lang="en" className="mt-1.5 leading-relaxed">
+                        {m}
+                      </p>
+                    ))}
+                  </details>
+                </>
+              ) : (
+                management.map((m) => (
+                  <p key={m} lang="en" className="text-sm leading-relaxed">
+                    {m}
+                  </p>
+                ))
+              )}
             </div>
           )}
+
+          {!pair.pending && pair.status === "interaction" && <DrugProfiles profiles={pairProfiles} />}
 
           {ingredientPairs.length > 0 && !pair.pending && (
             <div className="flex max-w-[72ch] flex-col gap-1.5">

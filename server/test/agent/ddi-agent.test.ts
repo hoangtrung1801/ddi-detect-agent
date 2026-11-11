@@ -57,6 +57,53 @@ describe('DDI agent (scripted model)', () => {
     expect(r.report.overall_risk).toBe('medium');
   });
 
+  it('keeps the pharmacology analysis on interaction pairs and profiles only for interacting drugs', async () => {
+    const env = await makeAgentEnv();
+    const analysis = {
+      mechanism_type: 'pharmacodynamic',
+      why_harmful: '  Cả hai thuốc cùng làm giảm khả năng đông máu.  ',
+      chain: [
+        { actor: 'Warfarin', effect: 'Ức chế vitamin K' },
+        { actor: 'Ibuprofen', effect: 'Ức chế COX-1 tiểu cầu' },
+        { actor: 'Khi dùng chung', effect: 'Tăng nguy cơ chảy máu' },
+        { actor: ' ', effect: 'bỏ' },
+      ],
+      consequences: ['Chảy máu dạ dày', ' '],
+      risk_factors: ['Người cao tuổi'],
+      monitoring: ['INR'],
+      management_vi: '  ',
+    };
+    const profile = (name: string) => ({
+      name, drug_class: 'Lớp', mechanism: 'Cơ chế', indications: ['A'], pharmacokinetics: 'PK', adverse_effects: ['B'], interaction_role: 'Vai trò',
+    });
+    env.setResponses([
+      call('resolve_drugs', { drugs: [{ input: 'Warfarin' }, { input: 'Ibuprofen' }, { input: 'Digoxin' }] }),
+      call('check_interactions', { drugs: ['Warfarin', 'Ibuprofen', 'Digoxin'] }),
+      call('submit_report', {
+        ...draft([
+          { a: 'Warfarin', b: 'Ibuprofen', severity: 'moderate', explanation: 'Nguy cơ chảy máu.', analysis },
+          { a: 'Warfarin', b: 'Digoxin', explanation: 'x', analysis },
+        ]),
+        drug_profiles: [profile('warfarin'), profile('Ibuprofen'), profile('Digoxin'), profile('Ibuprofen')],
+      }),
+    ]);
+    const r = await env.agent.run({ drugs: ['Warfarin', 'Ibuprofen', 'Digoxin'] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const byKey = Object.fromEntries(r.report.pairs.map((p) => [`${p.a}|${p.b}`, p]));
+    expect(byKey['Warfarin|Ibuprofen']!.analysis).toEqual({
+      mechanism_type: 'pharmacodynamic',
+      why_harmful: 'Cả hai thuốc cùng làm giảm khả năng đông máu.',
+      chain: analysis.chain.slice(0, 3),
+      consequences: ['Chảy máu dạ dày'],
+      risk_factors: ['Người cao tuổi'],
+      monitoring: ['INR'],
+    });
+    expect(byKey['Warfarin|Digoxin']!.analysis).toBeUndefined();
+    expect(Object.keys(r.report.drug_profiles ?? {}).sort()).toEqual(['Ibuprofen', 'Warfarin']);
+    expect(r.report.drug_profiles!['Warfarin']!.name).toBe('Warfarin');
+  });
+
   it('model claiming a no_record pair is safe cannot change the status or the wording', async () => {
     const env = await makeAgentEnv();
     env.setResponses([

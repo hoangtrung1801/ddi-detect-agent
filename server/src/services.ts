@@ -4,6 +4,7 @@ import { createDdiAgent } from './agent/ddi-agent.ts';
 import { createExtractAgent } from './agent/extract-agent.ts';
 import type { Config } from './config.ts';
 import { openDomain } from './domain/open.ts';
+import { fetchLabel } from './domain/drug-labels.ts';
 import { link } from './domain/links.ts';
 import type { AppServices } from './http/services.ts';
 import { createOpenAiLlm } from './llm/models.ts';
@@ -28,7 +29,9 @@ export async function createServices(cfg: Config, log: Logger): Promise<AppServi
 
   const llm = createOpenAiLlm();
   const reasoning = cfg.reasoningEffort;
-  const deps = { drugDb, resolver, linkFn };
+  const labelCache = cache.labelCache();
+  const labelFn = (name: string) => fetchLabel(name, { cache: labelCache });
+  const deps = { drugDb, resolver, linkFn, labelFn };
   const ddi = createDdiAgent({
     ...deps,
     llm,

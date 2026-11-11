@@ -1,4 +1,5 @@
 import type { Database } from 'better-sqlite3';
+import type { DrugLabel, LabelCache } from '../domain/drug-labels.ts';
 import type { LinkCache, LinkInfo } from '../domain/links.ts';
 
 /** Generic TTL key/value cache in the app DB. */
@@ -26,6 +27,13 @@ export class SqlCache {
 
   purgeExpired(): number {
     return this.#purge.run(Date.now()).changes;
+  }
+
+  labelCache(): LabelCache {
+    return {
+      get: (k) => this.get<DrugLabel | null>('label', k),
+      set: (k, v, ttl) => this.set('label', k, v, ttl),
+    };
   }
 
   linkCache(): LinkCache {

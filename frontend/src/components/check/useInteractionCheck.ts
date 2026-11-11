@@ -111,6 +111,7 @@ export function useInteractionCheck() {
         severitySource: p.severity_source,
         sourceRecords: p.source_records,
         ingredientPairs: p.ingredient_pairs,
+        analysis: p.analysis,
         pending: false,
       }));
     }

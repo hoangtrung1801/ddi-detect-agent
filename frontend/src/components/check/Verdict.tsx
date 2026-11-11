@@ -1,6 +1,8 @@
-import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ALargeSmall, FileDown, Loader2, Square, Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RISK_META, type InteractionReport, type PairKind } from "@/lib/report";
+import { SeverityGauge } from "./SeverityGauge";
 import type { DisplayPair } from "./types";
 
 interface VerdictProps {
@@ -10,12 +12,16 @@ interface VerdictProps {
   unresolved: string[];
   onOpenPair: (id: string) => void;
   onFixDrug: () => void;
+  bigText: boolean;
+  onToggleBigText: () => void;
+  onDownloadPdf: () => void;
+  exporting: boolean;
 }
 
 const join = (names: string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} và ${names.at(-1)}`);
 
 /** The answer first: one sentence on whether these can be taken together, then what to do. */
-function headline(pairs: DisplayPair[], unresolved: string[]): { title: string; sub: string } {
+export function headline(pairs: DisplayPair[], unresolved: string[]): { title: string; sub: string } {
   const of = (...k: PairKind[]) => pairs.filter((p) => k.includes(p.kind));
   const [major, watch, minor, noRecord, missing] = [of("major"), of("moderate", "unknown"), of("minor"), of("no_record"), of("unresolved")];
   const top = pairs[0];
@@ -46,10 +52,36 @@ const TALLY: { kinds: PairKind[]; label: string; className: string }[] = [
   { kinds: ["unresolved"], label: "Chưa tra được", className: "bg-card text-neutral-ink border-dashed border-neutral-stroke" },
 ];
 
-export function Verdict({ report, pairs, unresolved, onOpenPair, onFixDrug }: VerdictProps) {
+/** Reads the verdict aloud in Vietnamese where the browser has a speech engine. */
+function useSpeech(text: string) {
+  const supported = typeof window !== "undefined" && "speechSynthesis" in window;
+  const [speaking, setSpeaking] = useState(false);
+  useEffect(() => () => (supported ? window.speechSynthesis.cancel() : undefined), [supported]);
+  const toggle = () => {
+    if (!supported) return;
+    const synth = window.speechSynthesis;
+    if (speaking) {
+      synth.cancel();
+      setSpeaking(false);
+      return;
+    }
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "vi-VN";
+    const voice = synth.getVoices().find((v) => v.lang.toLowerCase().startsWith("vi"));
+    if (voice) u.voice = voice;
+    u.rate = 0.95;
+    u.onend = u.onerror = () => setSpeaking(false);
+    synth.cancel();
+    synth.speak(u);
+    setSpeaking(true);
+  };
+  return { supported, speaking, toggle };
+}
+
+export function Verdict({ report, pairs, unresolved, onOpenPair, onFixDrug, bigText, onToggleBigText, onDownloadPdf, exporting }: VerdictProps) {
   const meta = RISK_META[report.overall_risk];
-  const Icon = meta.icon === "alert" ? AlertTriangle : meta.icon === "check" ? CheckCircle2 : Info;
   const { title, sub } = headline(pairs, unresolved);
+  const speech = useSpeech([title, sub, ...report.recommendations].join(". "));
   const missing = pairs.filter((p) => p.kind === "unresolved").length;
   const tally = TALLY.map((t) => ({ ...t, n: pairs.filter((p) => t.kinds.includes(p.kind)).length, first: pairs.find((p) => t.kinds.includes(p.kind)) })).filter(
     (t) => t.n > 0,
@@ -58,16 +90,32 @@ export function Verdict({ report, pairs, unresolved, onOpenPair, onFixDrug }: Ve
 
   return (
     <section aria-labelledby="verdict-title" className={cn("overflow-hidden rounded-2xl border bg-card", meta.panel.split(" ").find((c) => c.startsWith("border-")))}>
-      <div className={cn("flex gap-4 px-5 py-5 sm:px-6", meta.panel)}>
-        <span className={cn("hidden size-12 shrink-0 items-center justify-center rounded-xl sm:flex", report.overall_risk === "high" ? "bg-sev-major text-white" : "bg-card")}>
-          <Icon className={cn("size-6", report.overall_risk !== "high" && meta.title)} aria-hidden="true" />
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+      <div className={cn("flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-5 sm:px-6", meta.panel)}>
+        <div className="flex min-w-[240px] flex-[1_1_320px] flex-col gap-1.5">
           <div className={cn("text-[13px] font-bold tracking-wider uppercase", meta.title)}>Kết luận · {meta.label}</div>
           <h1 id="verdict-title" className={cn("text-2xl leading-tight font-bold tracking-tight sm:text-[28px]", meta.title)}>
             {title}
           </h1>
           <p className={cn("max-w-[72ch]", meta.title)}>{sub}</p>
+          <div className="flex flex-wrap gap-2 pt-1.5 print:hidden">
+            {speech.supported && (
+              <button type="button" onClick={speech.toggle} aria-pressed={speech.speaking} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-current/30 bg-card px-3.5 text-sm font-semibold text-foreground">
+                {speech.speaking ? <Square className="size-3.5" aria-hidden="true" /> : <Volume2 className="size-4" aria-hidden="true" />}
+                {speech.speaking ? "Dừng đọc" : "Nghe kết luận"}
+              </button>
+            )}
+            <button type="button" onClick={onToggleBigText} aria-pressed={bigText} className={cn("inline-flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold", bigText ? "border-foreground bg-foreground text-background" : "border-current/30 bg-card text-foreground")}>
+              <ALargeSmall className="size-4" aria-hidden="true" />
+              Chữ lớn
+            </button>
+            <button type="button" onClick={onDownloadPdf} disabled={exporting} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-current/30 bg-card px-3.5 text-sm font-semibold text-foreground disabled:opacity-60">
+              {exporting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <FileDown className="size-4" aria-hidden="true" />}
+              {exporting ? "Đang tạo PDF…" : "Tải PDF"}
+            </button>
+          </div>
+        </div>
+        <div className="mx-auto sm:mx-0">
+          <SeverityGauge risk={report.overall_risk} label={meta.label} />
         </div>
       </div>
 

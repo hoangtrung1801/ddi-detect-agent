@@ -5,7 +5,7 @@ import { slugify } from '../../src/domain/links.ts';
 import { makeDomain } from './domain.ts';
 import { makeFauxLlm } from './faux-llm.ts';
 
-export async function makeAgentEnv(over: { maxTurns?: number; queryTimeoutMs?: number; resolveMin?: number } = {}) {
+export async function makeAgentEnv(over: { maxTurns?: number; queryTimeoutMs?: number; resolveMin?: number; labels?: boolean } = {}) {
   const dom = await makeDomain(over.resolveMin !== undefined ? { resolveMin: over.resolveMin } : {});
   const f = makeFauxLlm();
   const events: ProgressEvent[] = [];
@@ -13,6 +13,17 @@ export async function makeAgentEnv(over: { maxTurns?: number; queryTimeoutMs?: n
     drugDb: dom.drugDb,
     resolver: dom.resolver,
     linkFn: async (n) => ({ url: `https://www.drugs.com/${slugify(n)}.html`, verified: true }),
+    ...(over.labels
+      ? {
+          labelFn: async (n: string) => ({
+            drug: n,
+            generic: n.toUpperCase(),
+            setId: `set-${slugify(n)}`,
+            url: `https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=set-${slugify(n)}`,
+            sections: { mechanism: `${n} mechanism text.`, drugInteractions: 'Unrelated sentence. Bleeding risk rises with warfarin and ibuprofen.' },
+          }),
+        }
+      : {}),
     llm: f.llm,
     config: {
       agentModel: 'faux-1',

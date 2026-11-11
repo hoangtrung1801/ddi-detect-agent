@@ -17,8 +17,8 @@ export interface PdfReportProps {
 }
 
 /** Each block is kept whole on one PDF page where possible. */
-const Block = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <div data-pdf-block className={className}>
+const Block = ({ children, className, style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) => (
+  <div data-pdf-block className={className} style={style}>
     {children}
   </div>
 );
@@ -75,6 +75,41 @@ export function PdfReport({ report, pairs, drugs, unresolved, qr, generatedAt }:
           </div>
           <SeverityGauge risk={report.overall_risk} label={meta.label} />
         </Block>
+
+        {(() => {
+          const urgent = [...new Set(report.pairs.flatMap((p) => p.analysis?.consequences ?? []).filter((c) => c.urgent).map((c) => c.text))];
+          return urgent.length ? (
+            <Block className="rounded-xl px-4 py-3">
+              <div style={{ border: "2px solid #B42318", background: "#FDECEA", borderRadius: 12, padding: "12px 16px", margin: "-12px -16px" }}>
+              <div className="text-[14px] font-bold text-[#7A1A12]">Đi cấp cứu (115) hoặc gọi bác sĩ ngay nếu có:</div>
+              <ul className="mt-1 flex flex-col gap-0.5 text-[#7A1A12]">
+                {urgent.map((t) => (
+                  <li key={t} className="flex gap-1.5">
+                    <span className="shrink-0">–</span>
+                    <span className="font-semibold">{t}</span>
+                  </li>
+                ))}
+              </ul>
+              </div>
+            </Block>
+          ) : null;
+        })()}
+
+        {report.audit && (
+          <Block className="grid grid-cols-4 gap-2 rounded-xl px-4 py-3" style={{ background: "#E6F4F3" }}>
+            {[
+              [`${report.audit.drugs_matched}/${report.audit.drugs_total}`, "thuốc nhận diện được"],
+              [new Intl.NumberFormat("vi-VN").format(report.audit.db_interactions), "cặp tương tác DDInter 2.0 đã đối chiếu"],
+              [String(report.audit.fda_labels + report.audit.ddinter_pages), "tài liệu gốc (nhãn FDA, DDInter)"],
+              [`${report.audit.claims_kept}`, `ý có dẫn nguồn${report.audit.claims_written > report.audit.claims_kept ? `; ${report.audit.claims_written - report.audit.claims_kept} ý thiếu nguồn đã bị loại` : ""}`],
+            ].map(([n, l]) => (
+              <div key={l} style={{ color: "#0B4C50" }}>
+                <div className="text-[18px] font-bold">{n}</div>
+                <div className="text-[11px] leading-snug">{l}</div>
+              </div>
+            ))}
+          </Block>
+        )}
 
         <Block className="flex flex-col gap-1.5">
           <div className="text-[14px] font-bold">Thuốc đã kiểm tra ({drugs.length})</div>

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { ALargeSmall, FileDown, Loader2, Square, Volume2 } from "lucide-react";
+import { ALargeSmall, FileDown, Loader2, Share2, Square, Volume2 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { RISK_META, type InteractionReport, type PairKind } from "@/lib/report";
+import { KIND_META, RISK_META, type InteractionReport, type PairKind } from "@/lib/report";
 import { SeverityGauge } from "./SeverityGauge";
 import type { DisplayPair } from "./types";
 
@@ -78,6 +79,30 @@ function useSpeech(text: string) {
   return { supported, speaking, toggle };
 }
 
+/** Plain-text summary for sharing with family or a doctor, with source links. */
+function shareText(report: InteractionReport, pairs: DisplayPair[], title: string, sub: string): string {
+  const lines = [`DRUG-GUARD AI: ${title}`, sub, ""];
+  for (const p of pairs) lines.push(`• ${p.a} + ${p.b}: ${KIND_META[p.kind].label} (${KIND_META[p.kind].answer})`);
+  if (report.recommendations.length) lines.push("", "Nên làm:", ...report.recommendations.map((r, i) => `${i + 1}. ${r}`));
+  const src = Object.values(report.sources ?? {});
+  if (src.length) lines.push("", "Nguồn:", ...src.map((s) => `- ${s.title}: ${s.url}`));
+  lines.push("", "Thông tin tham khảo, không thay thế tư vấn của bác sĩ/dược sĩ.");
+  return lines.join("\n");
+}
+
+async function share(text: string, title: string) {
+  try {
+    if (navigator.share) {
+      await navigator.share({ title, text });
+      return;
+    }
+    await navigator.clipboard.writeText(text);
+    toast.success("Đã sao chép kết quả, dán vào Zalo/Messenger để gửi.");
+  } catch (err) {
+    if ((err as Error)?.name !== "AbortError") toast.error("Không chia sẻ được, hãy dùng nút Tải PDF.");
+  }
+}
+
 export function Verdict({ report, pairs, unresolved, onOpenPair, onFixDrug, bigText, onToggleBigText, onDownloadPdf, exporting }: VerdictProps) {
   const meta = RISK_META[report.overall_risk];
   const { title, sub } = headline(pairs, unresolved);
@@ -112,6 +137,10 @@ export function Verdict({ report, pairs, unresolved, onOpenPair, onFixDrug, bigT
               {exporting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <FileDown className="size-4" aria-hidden="true" />}
               {exporting ? "Đang tạo PDF…" : "Tải PDF"}
             </button>
+            <button type="button" onClick={() => share(shareText(report, pairs, title, sub), title)} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-current/30 bg-card px-3.5 text-sm font-semibold text-foreground">
+              <Share2 className="size-4" aria-hidden="true" />
+              Gửi người thân
+            </button>
           </div>
         </div>
         <div className="mx-auto sm:mx-0">
@@ -144,6 +173,7 @@ export function Verdict({ report, pairs, unresolved, onOpenPair, onFixDrug, bigT
             </ol>
           </>
         )}
+        {pairs.length > 1 && (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2 pt-1">
           {tally.map((t) => (
             <button
@@ -157,6 +187,7 @@ export function Verdict({ report, pairs, unresolved, onOpenPair, onFixDrug, bigT
             </button>
           ))}
         </div>
+        )}
       </div>
     </section>
   );

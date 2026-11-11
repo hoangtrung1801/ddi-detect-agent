@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { excerpt, fetchLabel, mentioning, parseLabel, type DrugLabel } from '../../src/domain/drug-labels.ts';
+import { bestLabel, excerpt, fetchLabel, mentioning, parseLabel, type DrugLabel } from '../../src/domain/drug-labels.ts';
 import { literatureLink } from '../../src/agent/evidence.ts';
 
 const raw = {
@@ -34,11 +34,28 @@ describe('FDA labels', () => {
       return urls.length === 1 ? new Response('{}', { status: 404 }) : Response.json({ results: [raw] });
     };
     expect((await fetchLabel('Warfarin', { cache, fetchFn: ok as typeof fetch }))?.setId).toBe('abc-123');
-    expect(urls).toHaveLength(2);
+    expect(urls).toHaveLength(3); // all queries run at once; the first that matched wins
     expect(await fetchLabel('Warfarin', { cache, fetchFn: (() => { throw new Error('no'); }) as typeof fetch })).not.toBeNull();
     const down = (async () => new Response('', { status: 500 })) as typeof fetch;
     expect(await fetchLabel('Other', { cache, fetchFn: down })).toBeNull();
-    expect(store.has('v1:other')).toBe(false);
+    expect(store.has('v3:other')).toBe(false);
+  });
+
+  it('prefers a single-ingredient label over a combination product', () => {
+    const combo = { set_id: 'combo', openfda: { generic_name: ['HYDROCODONE BITARTRATE AND ACETAMINOPHEN'], substance_name: ['HYDROCODONE', 'ACETAMINOPHEN'] } };
+    const solo = { set_id: 'solo', openfda: { generic_name: ['ACETAMINOPHEN'], substance_name: ['ACETAMINOPHEN'] } };
+    expect(bestLabel('Acetaminophen', 'acetaminophen', [combo, solo])).toMatchObject({ setId: 'solo', single: true });
+    expect(bestLabel('Acetaminophen', 'acetaminophen', [combo])).toMatchObject({ setId: 'combo', single: false });
+  });
+
+  it('looks up international names under their US label name', async () => {
+    const urls: string[] = [];
+    const f = (async (u: string | URL | Request) => {
+      urls.push(decodeURIComponent(String(u)));
+      return new Response('{}', { status: 404 });
+    }) as typeof fetch;
+    expect(await fetchLabel('Acetylsalicylic acid', { fetchFn: f })).toBeNull();
+    expect(urls.every((u) => u.includes('"aspirin"'))).toBe(true);
   });
 
   it('links literature directly when it has a PMID or DOI, else via PubMed search', () => {

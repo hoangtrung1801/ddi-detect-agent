@@ -96,8 +96,13 @@ export const PairAnalysisSchema = Type.Object({
     { maxItems: 5, description: 'Mechanism chain (2-5 steps): one step per drug, then the combined result last' },
   ),
   consequences: Type.Array(
-    Type.Object({ text: Type.String({ description: 'Vietnamese clinical consequence / warning sign (short)' }), organ: OrganSchema, sources: Sources('this consequence') }),
-    { maxItems: 6 },
+    Type.Object({
+      text: Type.String({ description: 'Vietnamese clinical consequence / warning sign (short, one organ per item)' }),
+      organ: OrganSchema,
+      urgent: Type.Optional(Type.Boolean({ description: 'true when the cited source says this sign needs emergency care or calling a doctor right away' })),
+      sources: Sources('this consequence'),
+    }),
+    { maxItems: 8 },
   ),
   risk_factors: Type.Array(Cited('risk factor: who is at higher risk'), { maxItems: 5 }),
   monitoring: Type.Array(Cited('item to monitor (lab test or symptom); no dose changes'), { maxItems: 5 }),
@@ -119,6 +124,21 @@ export const DrugProfileSchema = Type.Object({
   interaction_role: Cited('property of this drug that drives the interaction(s) in this report, 1 sentence'),
 });
 export type DrugProfile = Static<typeof DrugProfileSchema>;
+
+export const AuditSchema = Type.Object({
+  drugs_total: Type.Integer(),
+  drugs_matched: Type.Integer(),
+  pairs_checked: Type.Integer(),
+  /** Size of the interaction database searched. */
+  db_interactions: Type.Integer(),
+  db_drugs: Type.Integer(),
+  ddinter_pages: Type.Integer(),
+  fda_labels: Type.Integer(),
+  /** Claims the AI wrote, and how many survived the citation check. */
+  claims_written: Type.Integer(),
+  claims_kept: Type.Integer(),
+});
+export type Audit = Static<typeof AuditSchema>;
 
 export const ReportPairSchema = Type.Object({
   a: Type.String(),
@@ -155,6 +175,8 @@ export const InteractionReportSchema = Type.Object({
   drug_profiles: Type.Optional(Type.Record(Type.String(), DrugProfileSchema)),
   /** Evidence cited anywhere in the report, by id. */
   sources: Type.Optional(Type.Record(Type.String(), EvidenceSourceSchema)),
+  /** What was checked, for the "why trust this" panel. Counts come from code, not the model. */
+  audit: Type.Optional(AuditSchema),
   disclaimer: Type.String(),
 });
 export type InteractionReport = Static<typeof InteractionReportSchema>;

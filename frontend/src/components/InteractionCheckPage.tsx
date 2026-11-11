@@ -206,6 +206,8 @@ export function InteractionCheckPage({ initialDrugs, onRequireLogin }: Interacti
         steps={check.steps}
         resolved={resolved}
         livePairs={check.livePairs}
+        evidence={check.evidence}
+        startedAt={check.startedAt}
         unresolved={toFix.map((d) => d.name)}
         stale={stale}
         photos={photos}

@@ -3,9 +3,11 @@ import { FileDown, Loader2, Printer, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { InteractionReport, PairResult, ResolvedDrug } from "@/lib/report";
+import type { EvidenceSource, InteractionReport, PairResult, ResolvedDrug } from "@/lib/report";
 import { AnalysisProgress } from "./AnalysisProgress";
 import { AskAboutResult } from "./AskAboutResult";
+import { EmergencyCard } from "./EmergencyCard";
+import { TrustPanel } from "./TrustPanel";
 import { PairCard } from "./PairCard";
 import { PairMatrix } from "./PairMatrix";
 import { SourcePhotos } from "./SourcePhotos";
@@ -21,6 +23,8 @@ interface ResultsPanelProps {
   steps: Record<StepId, StepState>;
   resolved: ResolvedDrug[];
   livePairs: PairResult[];
+  evidence?: EvidenceSource[];
+  startedAt?: number | null;
   /** Inputs the database did not recognise. */
   unresolved: string[];
   stale: boolean;
@@ -34,7 +38,7 @@ interface ResultsPanelProps {
 
 const anchor = (id: string) => `pair-${id.replace(/\W/g, "_")}`;
 
-export function ResultsPanel({ drugs, pairs, report, running, steps, resolved, livePairs, unresolved, stale, photos, photoView, onViewPhoto, onSave, isSaving, onFixDrug }: ResultsPanelProps) {
+export function ResultsPanel({ drugs, pairs, report, running, steps, resolved, livePairs, evidence = [], startedAt = null, unresolved, stale, photos, photoView, onViewPhoto, onSave, isSaving, onFixDrug }: ResultsPanelProps) {
   // undefined: the most serious pair is open; null: all closed.
   const [openId, setOpenId] = useState<string | null | undefined>(undefined);
   const [view, setView] = useState<"list" | "grid">("list");
@@ -90,9 +94,19 @@ export function ResultsPanel({ drugs, pairs, report, running, steps, resolved, l
     <div className="flex flex-wrap items-start gap-5">
       <div className={cn("flex min-w-0 flex-[999_1_620px] flex-col gap-5", stale && "opacity-60")} style={bigText ? { zoom: 1.18 } : undefined}>
         {report ? (
-          <Verdict report={report} pairs={pairs} unresolved={unresolved} onOpenPair={openPair} onFixDrug={onFixDrug} bigText={bigText} onToggleBigText={toggleBigText} onDownloadPdf={downloadPdf} exporting={exporting} />
+          <>
+            <div className="dg-reveal">
+              <Verdict report={report} pairs={pairs} unresolved={unresolved} onOpenPair={openPair} onFixDrug={onFixDrug} bigText={bigText} onToggleBigText={toggleBigText} onDownloadPdf={downloadPdf} exporting={exporting} />
+            </div>
+            <div className="dg-reveal empty:hidden" style={{ animationDelay: "120ms" }}>
+              <EmergencyCard report={report} />
+            </div>
+            <div className="dg-reveal empty:hidden" style={{ animationDelay: "240ms" }}>
+              <TrustPanel report={report} />
+            </div>
+          </>
         ) : (
-          <AnalysisProgress steps={steps} running={running} resolved={resolved} pairs={livePairs} />
+          <AnalysisProgress steps={steps} running={running} resolved={resolved} pairs={livePairs} evidence={evidence} startedAt={startedAt} />
         )}
 
         {pairs.length > 0 && (

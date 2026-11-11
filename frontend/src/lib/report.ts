@@ -73,6 +73,18 @@ export const ORGAN_LABEL: Record<Organ, string> = {
   other: "Khác",
 };
 
+export interface Audit {
+  drugs_total: number;
+  drugs_matched: number;
+  pairs_checked: number;
+  db_interactions: number;
+  db_drugs: number;
+  ddinter_pages: number;
+  fda_labels: number;
+  claims_written: number;
+  claims_kept: number;
+}
+
 /** A citable source registered by the server. */
 export interface EvidenceSource {
   id: string;
@@ -92,7 +104,7 @@ export interface PairAnalysis {
   why_harmful: string;
   why_harmful_sources: string[];
   chain: { actor: string; effect: string; sources: string[] }[];
-  consequences: (Cited & { organ: Organ })[];
+  consequences: (Cited & { organ: Organ; urgent?: boolean })[];
   risk_factors: Cited[];
   monitoring: Cited[];
   onset?: Cited;
@@ -165,6 +177,8 @@ export interface InteractionReport {
   drug_profiles?: Record<string, DrugProfile>;
   /** Evidence cited anywhere in the report, by id. */
   sources?: Record<string, EvidenceSource>;
+  /** What was checked; counts come from the server, not the model. */
+  audit?: Audit;
   disclaimer: string;
 }
 
@@ -184,7 +198,8 @@ export type ProgressEvent =
   | { type: "tool_end"; tool: string; ok: boolean; ms: number }
   | { type: "resolved"; drugs: ResolvedDrug[] }
   | { type: "pairs"; pairs: PairResult[] }
-  | { type: "links"; links: Record<string, LinkInfo> };
+  | { type: "links"; links: Record<string, LinkInfo> }
+  | { type: "evidence"; sources: EvidenceSource[] };
 
 /** One visual category per pair: interaction severities plus the two "unknown" states. */
 export type PairKind = Severity | "unknown" | "no_record" | "unresolved";

@@ -171,6 +171,24 @@ describe('resumable HTTP enrichment', () => {
       } finally { await close(server); rmSync(dir, { recursive: true, force: true }); }
     });
 
+    it('fetches explicit page ids concurrently and skips pages already archived', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'ddi-ids-'));
+      const database = join(dir, 'ddi.sqlite'); createStarCatalog(database);
+      let inFlight = 0, maxInFlight = 0, requests = 0;
+      const server = starServer((id, res) => {
+        requests++; inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
+        setTimeout(() => { inFlight--; res.end(starHtml(id - 700)); }, 30);
+      });
+      const baseUrl = await listen(server);
+      try {
+        const options = { database, archive: join(dir, 'crawl.sqlite'), baseUrl, intervalMs: 0, concurrency: 3, pageIds: [702, 703, 704, 705, 706] };
+        expect((await crawlInteractionDetails(options)).enrichedPairs).toBe(5);
+        expect(maxInFlight).toBeGreaterThan(1); expect(maxInFlight).toBeLessThanOrEqual(3);
+        await crawlInteractionDetails(options);
+        expect(requests).toBe(5);
+      } finally { await close(server); rmSync(dir, { recursive: true, force: true }); }
+    });
+
     it('spaces request starts by the shared interval across workers', async () => {
       const dir = mkdtempSync(join(tmpdir(), 'ddi-pace-'));
       const database = join(dir, 'ddi.sqlite'); createStarCatalog(database);

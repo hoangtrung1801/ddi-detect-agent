@@ -18,6 +18,11 @@ export interface SourceInteractionRecord {
   drugBId: string;
   level: string;
   url: string;
+  /** Absent for the official category CSV exports; 'website-listing' for pairs read from a drug's interaction listing. */
+  origin?: 'website-listing';
+  /** The drug page whose interaction listing named this pair. */
+  listingUrl?: string;
+  retrievedAt?: string;
   details?: InteractionDetail[];
 }
 

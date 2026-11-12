@@ -6,7 +6,7 @@
   "license": "CC-BY-NC-SA-4.0",
   "websiteUpdated": "2024-05-14",
   "attribution": "DDInter 2.0, curated by the DDInter team. https://ddinter2.scbdd.com/",
-  "limitations": "Official category exports only; not the entire advertised database. Mechanisms, management guidance and references are not supplied in these CSV exports. Unknown is not a minor interaction. No record does not imply safety.",
+  "limitations": "Category CSV exports cover only pairs with at least one drug in ATC groups A, B, D, H, L, P, R or V; pairs outside them (e.g. Sildenafil + Nitroglycerin) were added from the DDInter website's per-drug interaction listings (see supplement), with the listed risk level only. The CSV exports and listings supply no mechanism description, management guidance or references; those come only from separately crawled interaction pages where available. Unknown is not a minor interaction. No record does not imply safety.",
   "sourceRows": 222383,
   "duplicateRows": 62148,
   "records": 160235,
@@ -78,5 +78,38 @@
   "processed": {
     "file": "db_drug_interactions.csv",
     "sha256": "3069fa8823e847ba6973cc9676421109ec5df77746da4ffe943fab5319307472"
+  },
+  "supplement": {
+    "source": "DDInter 2.0 website: per-drug interaction listings",
+    "url": "https://ddinter2.scbdd.com/server/interact-with/<DDInter drug id>/ (the table on https://ddinter2.scbdd.com/server/drug-detail/<DDInter drug id>/)",
+    "method": "Breadth-first over every catalog drug and every partner the listings name; each added record keeps its interaction page URL, the listing drug page URL and the retrieval time.",
+    "levelEncoding": {
+      "0": "Unknown",
+      "1": "Minor",
+      "2": "Moderate",
+      "3": "Major"
+    },
+    "retrievedFrom": "2026-11-12T08:42:58.595Z",
+    "retrievedTo": "2026-11-12T09:03:05.506Z",
+    "crawledDrugs": 2276,
+    "listingEntries": 604990,
+    "selfListedPages": 1,
+    "listedPairs": 295164,
+    "pairsAlreadyInCsv": 160235,
+    "levelAgreementWithCsv": 159975,
+    "levelDisagreementWithCsv": 260,
+    "addedPairs": 134929,
+    "addedByLevel": {
+      "Major": 24050,
+      "Unknown": 12602,
+      "Moderate": 92733,
+      "Minor": 5511,
+      "Moderate/Major": 30,
+      "Minor/Moderate": 3
+    },
+    "addedDrugs": 337,
+    "skippedNameConflicts": 0,
+    "totalPairs": 295164,
+    "totalDrugs": 2276
   }
 }

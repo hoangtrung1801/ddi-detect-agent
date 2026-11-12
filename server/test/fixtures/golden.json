@@ -458,7 +458,7 @@
     {
      "a": "Sildenafil",
      "b": "Tramadol",
-     "status": "no_record"
+     "status": "interaction"
     }
    ],
    "unresolved_pairs": 0
@@ -527,7 +527,7 @@
     {
      "a": "Fluoxetine",
      "b": "Tramadol",
-     "status": "no_record"
+     "status": "interaction"
     }
    ],
    "unresolved_pairs": 0
@@ -567,7 +567,7 @@
     {
      "a": "Digoxin",
      "b": "Furosemide",
-     "status": "no_record"
+     "status": "interaction"
     }
    ],
    "unresolved_pairs": 0
@@ -651,6 +651,29 @@
    },
    "pairs": [],
    "unresolved_pairs": 1
+  }
+ },
+ {
+  "id": "viagra-nitroglycerin",
+  "input": {
+   "drugs": [
+    "Viagra",
+    "Nitroglycerin"
+   ]
+  },
+  "expect": {
+   "resolved": {
+    "Viagra": "Sildenafil",
+    "Nitroglycerin": "Nitroglycerin"
+   },
+   "pairs": [
+    {
+     "a": "Sildenafil",
+     "b": "Nitroglycerin",
+     "status": "interaction"
+    }
+   ],
+   "unresolved_pairs": 0
   }
  }
 ]

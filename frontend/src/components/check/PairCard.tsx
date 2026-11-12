@@ -24,6 +24,7 @@ export function PairCard({ pair, open, onToggle, links, profiles = {}, evidence 
   const pendingInteraction = pair.pending && pair.status === "interaction";
   const ingredientPairs = pair.ingredientPairs ?? [];
   const details = [...new Map((pair.sourceRecords ?? []).flatMap((r) => (r.details ?? []).map((d) => [d.pageId, d] as const))).values()];
+  const listingRecords = (pair.sourceRecords ?? []).filter((r) => r.origin === "website-listing");
   const management = [...new Set(details.map((d) => d.management).filter((m): m is string => !!m))];
   // Links are keyed by database name: the drugs themselves, or the interacting ingredients of a product.
   const sources = [...new Set([pair.a, pair.b, ...ingredientPairs.flatMap((i) => [i.a, i.b])])]
@@ -33,7 +34,7 @@ export function PairCard({ pair, open, onToggle, links, profiles = {}, evidence 
     .map((n) => profiles[n])
     .filter((p): p is DrugProfile => !!p);
   const analysis = !pair.pending && pair.status === "interaction" ? pair.analysis : undefined;
-  const detailUrls = new Set(details.map((d) => d.url));
+  const detailUrls = new Set([...details.map((d) => d.url), ...listingRecords.map((r) => r.url)]);
   const ddinterIds = Object.values(evidence)
     .filter((s) => s.kind === "ddinter" && detailUrls.has(s.url))
     .map((s) => s.id);
@@ -176,7 +177,9 @@ export function PairCard({ pair, open, onToggle, links, profiles = {}, evidence 
                       Mức độ trên trang: {d.level} · Thu thập: {new Date(d.retrievedAt).toLocaleDateString("vi-VN")}
                     </p>
                     {pair.sourceRecords?.some((r) => r.details?.some((x) => x.pageId === d.pageId) && r.level !== d.level) && (
-                      <p className="font-semibold">Mức độ trên trang khác dữ liệu CSV. Cần dược sĩ kiểm tra; hệ thống giữ nguyên mức độ đã nhập.</p>
+                      <p className="font-semibold">
+                        {listingRecords.length ? "Mức độ trên trang khác danh sách tương tác của DDInter." : "Mức độ trên trang khác dữ liệu CSV."} Cần dược sĩ kiểm tra; hệ thống giữ nguyên mức độ đã nhập.
+                      </p>
                     )}
                     <p>
                       <span className="font-semibold">Phân loại cơ chế: </span>
@@ -205,6 +208,22 @@ export function PairCard({ pair, open, onToggle, links, profiles = {}, evidence 
           {pair.dbCondition && ingredientPairs.length === 0 && details.length === 0 && !pair.pending && (
             <p className="max-w-[72ch] text-xs text-muted-foreground">
               <span className="font-semibold">Mô tả gốc trong cơ sở dữ liệu:</span> <span lang="en">{pair.dbCondition}</span>
+            </p>
+          )}
+
+          {!pair.pending && details.length === 0 && listingRecords.length > 0 && (
+            <p className="max-w-[72ch] text-xs text-muted-foreground">
+              <span className="font-semibold">Nguồn: </span>
+              {listingRecords.map((r, i) => (
+                <span key={r.url}>
+                  {i > 0 && ", "}
+                  <a href={r.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary underline">
+                    DDInter #{r.url.match(/interact\/(\d+)/)?.[1]} · {r.level}
+                  </a>
+                </span>
+              ))}
+              {" "}— cặp thuốc này có trên website DDInter 2.0 nhưng không có trong bộ dữ liệu CSV tải về
+              {listingRecords[0]?.retrievedAt ? ` (thu thập ${new Date(listingRecords[0].retrievedAt).toLocaleDateString("vi-VN")})` : ""}.
             </p>
           )}
 

@@ -29,8 +29,8 @@ export function BodyMap({ consequences, severe, animate = true }: { consequences
   const has = (o: Organ) => organs.includes(o);
 
   return (
-    <div className="flex flex-wrap items-start gap-4 rounded-xl border bg-card px-3.5 py-3.5">
-      <svg viewBox="0 0 200 400" className="h-[260px] w-[130px] shrink-0 sm:h-[300px] sm:w-[150px]" role="img" aria-label={`Cơ quan bị ảnh hưởng: ${organs.map((o) => ORGAN_LABEL[o]).join(", ")}`}>
+    <div className="flex flex-wrap items-start gap-3 rounded-xl border bg-card px-3 py-3.5 sm:gap-4 sm:px-3.5">
+      <svg viewBox="0 0 200 400" className="h-[200px] w-[100px] shrink-0 sm:h-[300px] sm:w-[150px]" role="img" aria-label={`Cơ quan bị ảnh hưởng: ${organs.map((o) => ORGAN_LABEL[o]).join(", ")}`}>
         <path d={SILHOUETTE} fill="var(--muted)" stroke={has("skin") ? color : "var(--neutral-stroke)"} strokeWidth={has("skin") ? 3 : 1} strokeOpacity={has("skin") ? 1 : 0.5} />
         <path d={VESSELS} fill="none" stroke={has("blood") ? color : "transparent"} strokeWidth="3" strokeLinecap="round" strokeDasharray={has("blood") ? "0" : undefined} opacity={0.85}>
           {animate && has("blood") && <animate attributeName="opacity" values="0.45;1;0.45" dur="1.8s" repeatCount="indefinite" />}
@@ -53,7 +53,7 @@ export function BodyMap({ consequences, severe, animate = true }: { consequences
           );
         })}
       </svg>
-      <ol className="flex min-w-[180px] flex-1 flex-col gap-2.5">
+      <ol className="flex min-w-[150px] flex-1 flex-col gap-2.5">
         {organs.map((o) => (
           <li key={o} className="flex gap-2.5">
             <span className="flex size-[22px] shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-background">{num(o)}</span>
@@ -64,6 +64,7 @@ export function BodyMap({ consequences, severe, animate = true }: { consequences
                   .filter((c) => c.organ === o)
                   .map((c) => (
                     <li key={c.text}>
+                      {c.urgent && <span className="mr-1.5 rounded bg-sev-major px-1.5 py-px text-[11px] font-bold text-white">Cấp cứu</span>}
                       {c.text}
                       <Cite ids={c.sources} />
                     </li>

@@ -32,6 +32,27 @@ export function buildCiteIndex(sources: Record<string, EvidenceSource>, analysis
   return { order, sources };
 }
 
+const SHORT: Record<EvidenceSource["kind"], string> = { "fda-label": "FDA", ddinter: "DDInter", literature: "Y văn" };
+
+/** Links to evidence labelled by publisher instead of number, for summaries outside a numbered card. */
+export function SourceTags({ ids, sources }: { ids: string[]; sources: Record<string, EvidenceSource> }) {
+  const known = [...new Set(ids)].filter((id) => sources[id]);
+  if (!known.length) return null;
+  return (
+    <span className="ml-1.5 inline-flex flex-wrap gap-1 align-[1px]">
+      {known.map((id) => {
+        const s = sources[id]!;
+        return (
+          <a key={id} href={s.url} target="_blank" rel="noopener noreferrer" title={`${s.publisher}: ${s.title}`} className="inline-flex h-[18px] items-center rounded-[5px] border border-current/25 bg-white/70 px-1.5 text-[11px] leading-none font-bold no-underline hover:bg-white">
+            {SHORT[s.kind]}
+            {s.drug ? ` · ${s.drug}` : ""}
+          </a>
+        );
+      })}
+    </span>
+  );
+}
+
 /** Superscript-style numbered links to the evidence behind a claim. */
 export function Cite({ ids, className }: { ids: string[] | undefined; className?: string }) {
   const { order, sources } = useContext(CiteCtx);

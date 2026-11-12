@@ -88,7 +88,7 @@ describe('DDI agent (scripted model)', () => {
         drug_profiles: [profile('warfarin', ['S1']), profile('Ibuprofen', ['S42']), profile('Digoxin', ['S1'])],
       }),
     ]);
-    const r = await env.agent.run({ drugs: ['Warfarin', 'Ibuprofen', 'Digoxin'] });
+    const r = await env.agent.run({ drugs: ['Warfarin', 'Ibuprofen', 'Digoxin'] }, { sink: env.sink });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const byKey = Object.fromEntries(r.report.pairs.map((p) => [`${p.a}|${p.b}`, p]));
@@ -107,6 +107,10 @@ describe('DDI agent (scripted model)', () => {
     expect(r.report.drug_profiles!['Warfarin']!.adverse_effects).toEqual([]);
     expect(Object.keys(r.report.sources ?? {}).sort()).toEqual(['S1', 'S2']);
     expect(r.report.sources!['S1']).toMatchObject({ kind: 'fda-label', link: 'direct', url: expect.stringContaining('dailymed.nlm.nih.gov') });
+    const ev = env.events.find((e) => e.type === 'evidence');
+    expect(ev?.type === 'evidence' && ev.sources.map((x) => x.kind)).toEqual(['fda-label', 'fda-label']);
+    // 2 analyses of 8 claims and 3 profiles of 4 claims were written; 5 + 3 survive the citation check.
+    expect(r.report.audit).toMatchObject({ drugs_total: 3, drugs_matched: 3, pairs_checked: 3, fda_labels: 2, ddinter_pages: 0, claims_written: 28, claims_kept: 8 });
   });
 
   it('drops the whole analysis when why_harmful cites nothing valid', async () => {

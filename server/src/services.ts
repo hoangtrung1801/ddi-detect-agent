@@ -30,7 +30,7 @@ export async function createServices(cfg: Config, log: Logger): Promise<AppServi
   const llm = createOpenAiLlm();
   const reasoning = cfg.reasoningEffort;
   const labelCache = cache.labelCache();
-  const labelFn = (name: string) => fetchLabel(name, { cache: labelCache });
+  const labelFn = (name: string) => fetchLabel(name, { cache: labelCache, ...(cfg.openFdaApiKey ? { apiKey: cfg.openFdaApiKey } : {}) });
   const deps = { drugDb, resolver, linkFn, labelFn };
   const ddi = createDdiAgent({
     ...deps,

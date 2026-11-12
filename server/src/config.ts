@@ -4,6 +4,8 @@ import { Value } from 'typebox/value';
 
 const ConfigSchema = Type.Object({
   openaiApiKey: Type.String(),
+  /** Optional openFDA key: raises the label API limit from 1,000 to 120,000 requests a day. */
+  openFdaApiKey: Type.String(),
   agentModel: Type.String({ minLength: 1 }),
   chatModel: Type.String({ minLength: 1 }),
   extractModel: Type.String({ minLength: 1 }),
@@ -43,6 +45,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const num = (v: string | undefined, d: number) => (v === undefined || v === '' ? d : Number(v));
   const cfg = {
     openaiApiKey: env.OPENAI_API_KEY ?? '',
+    openFdaApiKey: env.OPENFDA_API_KEY ?? '',
     agentModel: env.AGENT_MODEL ?? 'gpt-6-luna',
     chatModel: env.CHAT_MODEL ?? 'gpt-6-luna',
     extractModel: env.EXTRACT_MODEL ?? 'gpt-6-luna',

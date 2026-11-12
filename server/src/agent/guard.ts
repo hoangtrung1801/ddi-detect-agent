@@ -5,6 +5,7 @@ import {
   InteractionReportSchema,
   DISCLAIMER_VI,
   type DrugProfile,
+  type Audit,
   type EvidenceSource,
   type InteractionReport,
   type PairAnalysis,
@@ -85,6 +86,13 @@ function cleanProfile(p: DrugProfile, name: string, c: Citations): DrugProfile |
     adverse_effects: c.list(p.adverse_effects),
     interaction_role: role,
   };
+}
+
+/** Number of cited claims (objects carrying sources, plus each why_harmful text) in a value. */
+function countClaims(v: unknown): number {
+  if (Array.isArray(v)) return v.reduce((n: number, x) => n + countClaims(x), 0);
+  if (!v || typeof v !== 'object') return 0;
+  return Object.entries(v).reduce((n, [k, x]) => n + (k === 'sources' || k === 'why_harmful_sources' ? 1 : countClaims(x)), 0);
 }
 
 /** Every source id cited anywhere in a value. */
@@ -189,6 +197,18 @@ export async function buildReport(draft: ReportDraft, ctx: RunContext): Promise<
   }
   // Cited sources, plus the DDInter pages behind every interaction (shown as the pair's source data).
   const used = citedIds([pairs, drugProfiles]);
+  const stats = ctx.deps.drugDb.stats();
+  const audit: Audit = {
+    drugs_total: drugs.length,
+    drugs_matched: drugs.filter((d) => d.dbName).length,
+    pairs_checked: ctx.pairs.filter((p) => p.status !== 'unresolved').length,
+    db_interactions: stats.interactions,
+    db_drugs: stats.drugs,
+    ddinter_pages: [...ctx.sources.values()].filter((s) => s.kind === 'ddinter').length,
+    fda_labels: [...ctx.sources.values()].filter((s) => s.kind === 'fda-label').length,
+    claims_written: countClaims([draft.pairs.map((p) => p.analysis), draft.drug_profiles ?? []]),
+    claims_kept: countClaims([pairs.map((p) => p.analysis), Object.values(drugProfiles)]),
+  };
   for (const s of ctx.sources.values()) if (s.kind === 'ddinter') used.add(s.id);
   const sources = Object.fromEntries([...ctx.sources.values()].filter((s) => used.has(s.id)).map((s) => [s.id, s]));
 
@@ -201,6 +221,7 @@ export async function buildReport(draft: ReportDraft, ctx: RunContext): Promise<
     links,
     ...(Object.keys(drugProfiles).length ? { drug_profiles: drugProfiles } : {}),
     ...(Object.keys(sources).length ? { sources } : {}),
+    audit,
     disclaimer: DISCLAIMER_VI,
   };
   if (!Value.Check(InteractionReportSchema, report)) {

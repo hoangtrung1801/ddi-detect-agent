@@ -9,6 +9,7 @@ import {
   type PairResult,
   type ProgressEvent,
   type ResolvedDrug,
+  type EvidenceSource,
 } from "@/lib/report";
 import type { DisplayDrug, DisplayPair } from "./types";
 
@@ -27,6 +28,8 @@ interface RunState {
   steps: Record<StepId, StepState>;
   resolved: ResolvedDrug[];
   livePairs: PairResult[];
+  evidence: EvidenceSource[];
+  startedAt: number | null;
   report: InteractionReport | null;
   error: string | null;
 }
@@ -36,6 +39,8 @@ const IDLE: RunState = {
   steps: { resolve: "pending", pairs: "pending", links: "pending", report: "pending" },
   resolved: [],
   livePairs: [],
+  evidence: [],
+  startedAt: null,
   report: null,
   error: null,
 };
@@ -54,6 +59,8 @@ function applyEvent(s: RunState, e: ProgressEvent): RunState {
       return { ...s, resolved: e.drugs };
     case "pairs":
       return { ...s, livePairs: e.pairs };
+    case "evidence":
+      return { ...s, evidence: e.sources };
     default:
       return s;
   }
@@ -68,7 +75,7 @@ export function useInteractionCheck() {
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
-    setState({ ...IDLE, running: true, steps: { ...IDLE.steps, resolve: "active" } });
+    setState({ ...IDLE, running: true, startedAt: Date.now(), steps: { ...IDLE.steps, resolve: "active" } });
     try {
       const report = await v2API.checkInteractions(drugs, (e) => setState((s) => applyEvent(s, e)), ac.signal);
       setState((s) => ({

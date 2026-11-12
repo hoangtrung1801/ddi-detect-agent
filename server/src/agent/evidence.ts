@@ -28,6 +28,9 @@ export function interactingDrugs(pairs: PairResult[]): Map<string, Set<string>> 
   return out;
 }
 
+const RISK_TERMS = ['bleeding', 'hemorrhage', 'risk', 'elderly', 'renal', 'hepatic', 'concomitant'];
+const URGENT_TERMS = ['emergency', 'right away', 'immediately', 'call your', 'seek medical', 'serious'];
+
 function labelText(s: EvidenceSource, l: DrugLabel, partners: string[]): string {
   const sec = l.sections;
   const parts: [string, string | undefined][] = [
@@ -37,6 +40,9 @@ function labelText(s: EvidenceSource, l: DrugLabel, partners: string[]): string 
     ['Pharmacokinetics', excerpt(sec.pharmacokinetics, 1000)],
     ['Adverse reactions', excerpt(sec.adverseReactions, 500)],
     [`Drug interactions mentioning ${partners.join(', ')}`, mentioning(sec.drugInteractions, partners, 900)],
+    [`Warnings mentioning ${partners.join(', ')} or related risks`, mentioning(sec.warnings, [...partners, ...RISK_TERMS], 900)],
+    ['Patient warning signs (when to call a doctor / emergency)', mentioning(sec.patientInfo, URGENT_TERMS, 800)],
+    ['Use in elderly patients', excerpt(sec.geriatric, 400)],
   ];
   return `[${s.id}] ${s.title} (${s.url})\n${parts
     .filter(([, v]) => v)
@@ -74,5 +80,7 @@ export async function gatherEvidence(ctx: RunContext, pairs: PairResult[]): Prom
       blocks.push(labelText(s, l, [...drugs.get(n)!]));
     }
   }
+  const docs = [...ctx.sources.values()].filter((s) => s.kind !== 'literature');
+  if (docs.length) ctx.emit({ type: 'evidence', sources: docs });
   return blocks.length ? `\n\nEVIDENCE SOURCES (cite these ids; every claim in analysis and drug_profiles needs at least one):\n${blocks.join('\n')}` : '';
 }

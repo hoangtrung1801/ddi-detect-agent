@@ -110,6 +110,14 @@
     "addedDrugs": 337,
     "skippedNameConflicts": 0,
     "totalPairs": 295164,
-    "totalDrugs": 2276
+    "totalDrugs": 2276,
+    "detailPages": {
+      "levels": [
+        "Major"
+      ],
+      "pages": 24763,
+      "pairs": 24080,
+      "note": "Interaction pages for added Major pairs were crawled (description, management, references); other added pairs carry the listed level and page URL only."
+    }
   }
 }

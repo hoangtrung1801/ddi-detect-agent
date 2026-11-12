@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ALargeSmall, FileDown, Loader2, Share2, Square, Volume2 } from "lucide-react";
+import { ALargeSmall, ChevronRight, FileDown, Loader2, Share2, Square, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { KIND_META, RISK_META, type InteractionReport, type PairKind } from "@/lib/report";
@@ -21,36 +21,45 @@ interface VerdictProps {
 
 const join = (names: string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} và ${names.at(-1)}`);
 
-/** The answer first: one sentence on whether these can be taken together, then what to do. */
-export function headline(pairs: DisplayPair[], unresolved: string[]): { title: string; sub: string } {
-  const of = (...k: PairKind[]) => pairs.filter((p) => k.includes(p.kind));
-  const [major, watch, minor, noRecord, missing] = [of("major"), of("moderate", "unknown"), of("minor"), of("no_record"), of("unresolved")];
-  const top = pairs[0];
-  const more = (list: DisplayPair[]) => (list.length > 1 ? ` và ${list.length - 1} cặp khác` : "");
-  const tail = missing.length ? ` Chưa nhận ra ${join(unresolved.map((u) => `“${u}”`))} nên còn ${missing.length} cặp chưa kiểm tra.` : "";
+/** Count phrase per category, most serious first, e.g. "1 cặp tương tác nhẹ". */
+const PHRASE: Record<PairKind, string> = {
+  major: "cặp nghiêm trọng",
+  moderate: "cặp cần theo dõi",
+  minor: "cặp tương tác nhẹ",
+  unknown: "cặp chưa rõ mức độ",
+  no_record: "cặp không có ghi nhận",
+  unresolved: "cặp chưa tra được",
+};
 
-  if (major.length && top)
-    return {
-      title: `Không nên dùng chung ${top.a} và ${top.b}${more(major)}`,
-      sub: `Đây là tương tác nghiêm trọng.${watch.length ? ` Thêm ${watch.length} cặp cần theo dõi.` : ""}${tail}`,
-    };
-  if (watch.length && top)
-    return {
-      title: top.kind === "unknown" ? `${top.a} và ${top.b} có tương tác, hỏi dược sĩ trước khi dùng chung` : `Dùng chung được nếu theo dõi: ${top.a} và ${top.b}${more(watch)}`,
-      sub: `Không có cặp nào ở mức nghiêm trọng.${tail}`,
-    };
-  if (minor.length && top) return { title: `Chỉ có tương tác nhẹ giữa ${top.a} và ${top.b}${more(minor)}`, sub: `Thường vẫn dùng chung được.${tail}` };
-  if (noRecord.length && !missing.length)
+/** The answer first: one sentence on whether these can be taken together, from the most serious pair down. */
+export function headline(pairs: DisplayPair[], unresolved: string[]): { title: string; sub: string } {
+  const of = (k: PairKind) => pairs.filter((p) => p.kind === k);
+  const more = (list: DisplayPair[]) => (list.length > 1 ? ` và ${list.length - 1} cặp khác` : "");
+  const tail = of("unresolved").length ? ` Chưa nhận ra ${join(unresolved.map((u) => `“${u}”`))} nên còn ${of("unresolved").length} cặp chưa kiểm tra.` : "";
+  /** The other interaction categories below the headline one. */
+  const others = (skip: PairKind) => {
+    const parts = (["major", "moderate", "minor", "unknown"] as PairKind[]).filter((k) => k !== skip && of(k).length).map((k) => `${of(k).length} ${PHRASE[k]}`);
+    return parts.length ? ` Ngoài ra còn ${join(parts)}.` : "";
+  };
+  const [major, moderate, minor, unknown] = [of("major"), of("moderate"), of("minor"), of("unknown")];
+
+  if (major[0]) return { title: `Không nên dùng chung ${major[0].a} và ${major[0].b}${more(major)}`, sub: `Đây là tương tác nghiêm trọng.${others("major")}${tail}` };
+  if (moderate[0]) return { title: `Dùng chung được nếu theo dõi: ${moderate[0].a} và ${moderate[0].b}${more(moderate)}`, sub: `Không có cặp nào ở mức nghiêm trọng.${others("moderate")}${tail}` };
+  if (minor[0]) return { title: `Chỉ có tương tác nhẹ giữa ${minor[0].a} và ${minor[0].b}${more(minor)}`, sub: `Thường vẫn dùng chung được.${others("minor")}${tail}` };
+  if (unknown[0])
+    return { title: `${unknown[0].a} và ${unknown[0].b}${more(unknown)} có tương tác chưa rõ mức độ`, sub: `Cơ sở dữ liệu ghi nhận tương tác nhưng chưa xếp mức độ; hỏi dược sĩ trước khi dùng chung.${tail}` };
+  if (of("no_record").length && !tail)
     return { title: "Không ghi nhận tương tác giữa các thuốc này", sub: "Không có ghi nhận không có nghĩa là chắc chắn an toàn. Hỏi dược sĩ nếu dùng chung lâu ngày." };
   return { title: "Chưa kiểm tra được hết các thuốc", sub: `Không thấy tương tác ở các cặp đã tra.${tail}` };
 }
 
-const TALLY: { kinds: PairKind[]; label: string; className: string }[] = [
-  { kinds: ["major"], label: "Không nên dùng chung", className: "bg-sev-major-soft text-sev-major-ink border-sev-major/30" },
-  { kinds: ["moderate", "unknown"], label: "Cần theo dõi", className: "bg-sev-moderate-soft text-sev-moderate-ink border-sev-moderate/40" },
-  { kinds: ["minor"], label: "Tương tác nhẹ", className: "bg-sev-minor-soft text-sev-minor border-sev-minor/30" },
-  { kinds: ["no_record"], label: "Không có ghi nhận", className: "bg-muted/60 text-neutral-ink border-border" },
-  { kinds: ["unresolved"], label: "Chưa tra được", className: "bg-card text-neutral-ink border-dashed border-neutral-stroke" },
+const TALLY: { kind: PairKind; label: string; dot: string }[] = [
+  { kind: "major", label: "nghiêm trọng", dot: "bg-sev-major" },
+  { kind: "moderate", label: "cần theo dõi", dot: "bg-sev-moderate" },
+  { kind: "minor", label: "nhẹ", dot: "bg-sev-minor" },
+  { kind: "unknown", label: "chưa rõ mức độ", dot: "bg-neutral-stroke" },
+  { kind: "no_record", label: "không có ghi nhận", dot: "border border-neutral-stroke bg-card" },
+  { kind: "unresolved", label: "chưa tra được", dot: "border border-dashed border-neutral-stroke bg-card" },
 ];
 
 /** Reads the verdict aloud in Vietnamese where the browser has a speech engine. */
@@ -83,7 +92,7 @@ function useSpeech(text: string) {
 function shareText(report: InteractionReport, pairs: DisplayPair[], title: string, sub: string): string {
   const lines = [`DRUG-GUARD AI: ${title}`, sub, ""];
   for (const p of pairs) lines.push(`• ${p.a} + ${p.b}: ${KIND_META[p.kind].label} (${KIND_META[p.kind].answer})`);
-  if (report.recommendations.length) lines.push("", "Nên làm:", ...report.recommendations.map((r, i) => `${i + 1}. ${r}`));
+  if (report.recommendations.length) lines.push("", "Gợi ý:", ...report.recommendations.map((r, i) => `${i + 1}. ${r}`));
   const src = Object.values(report.sources ?? {});
   if (src.length) lines.push("", "Nguồn:", ...src.map((s) => `- ${s.title}: ${s.url}`));
   lines.push("", "Thông tin tham khảo, không thay thế tư vấn của bác sĩ/dược sĩ.");
@@ -108,9 +117,10 @@ export function Verdict({ report, pairs, unresolved, onOpenPair, onFixDrug, bigT
   const { title, sub } = headline(pairs, unresolved);
   const speech = useSpeech([title, sub, ...report.recommendations].join(". "));
   const missing = pairs.filter((p) => p.kind === "unresolved").length;
-  const tally = TALLY.map((t) => ({ ...t, n: pairs.filter((p) => t.kinds.includes(p.kind)).length, first: pairs.find((p) => t.kinds.includes(p.kind)) })).filter(
-    (t) => t.n > 0,
-  );
+  const tally = TALLY.map((t) => ({ ...t, n: pairs.filter((p) => p.kind === t.kind).length })).filter((t) => t.n > 0);
+  // Pairs arrive sorted most serious first: major, moderate, minor, then unknown severity.
+  const interacting = pairs.filter((p) => p.status === "interaction");
+  const noRecord = pairs.filter((p) => p.kind === "no_record");
   const steps = [...report.recommendations];
 
   return (
@@ -148,10 +158,69 @@ export function Verdict({ report, pairs, unresolved, onOpenPair, onFixDrug, bigT
         </div>
       </div>
 
-      <div className="flex flex-col gap-3.5 px-5 pt-4 pb-5 sm:px-6">
-        {(steps.length > 0 || missing > 0) && (
-          <>
-            <h2 className="text-[15px] font-bold text-brand-ink">Việc bạn nên làm</h2>
+      <div className="flex flex-col gap-5 px-5 pt-4 pb-5 sm:px-6">
+        <section aria-labelledby="summary-title" className="flex flex-col gap-2.5">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5">
+            <h2 id="summary-title" className="text-[15px] font-bold text-brand-ink">
+              Tóm tắt các tương tác
+            </h2>
+            <span className="flex flex-wrap gap-x-3 gap-y-1 text-[13px] font-semibold text-neutral-ink">
+              {tally.map((t) => (
+                <span key={t.kind} className="inline-flex items-center gap-1.5">
+                  <span className={cn("size-2.5 rounded-full", t.dot)} aria-hidden="true" />
+                  {t.n} {t.label}
+                </span>
+              ))}
+            </span>
+          </div>
+          {interacting.length > 0 ? (
+            <ol className="flex flex-col gap-2">
+              {interacting.map((p) => (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    onClick={() => onOpenPair(p.id)}
+                    className="group flex w-full items-start gap-3 rounded-xl border bg-card px-3.5 py-3 text-left transition-colors hover:border-foreground"
+                  >
+                    <span className={cn("mt-0.5 hidden w-[96px] shrink-0 rounded-full px-2 py-0.5 text-center text-[11px] leading-tight font-bold sm:block", KIND_META[p.kind].badge)}>
+                      {p.kind === "unknown" ? KIND_META.unknown.short : KIND_META[p.kind].label}
+                    </span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className={cn("mb-0.5 w-fit rounded-full px-2 py-0.5 text-[11px] leading-tight font-bold sm:hidden", KIND_META[p.kind].badge)}>
+                        {p.kind === "unknown" ? KIND_META.unknown.short : KIND_META[p.kind].label}
+                      </span>
+                      <span className="font-bold">
+                        {p.a} + {p.b}
+                      </span>
+                      <span className="text-sm leading-snug text-neutral-ink">{p.explanation || KIND_META[p.kind].answer}</span>
+                    </span>
+                    <ChevronRight className="mt-1 size-4 shrink-0 text-neutral-ink transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ol>
+          ) : null}
+          {noRecord.length > 0 && (
+            <p className="text-sm text-neutral-ink">
+              <span className="font-semibold">{noRecord.length} cặp không có ghi nhận:</span> {join(noRecord.map((p) => `${p.a} + ${p.b}`))}. Không có ghi nhận không có nghĩa là chắc chắn an toàn.
+            </p>
+          )}
+          {missing > 0 && (
+            <p className="text-sm text-neutral-ink">
+              <span className="font-semibold">{missing} cặp chưa tra được.</span>{" "}
+              <button type="button" onClick={onFixDrug} className="text-left font-semibold text-primary underline underline-offset-2">
+                Sửa tên hoặc thành phần của {join(unresolved.map((u) => `“${u}”`))}
+              </button>{" "}
+              để kiểm tra nốt.
+            </p>
+          )}
+        </section>
+
+        {steps.length > 0 && (
+          <section aria-labelledby="advice-title" className="flex flex-col gap-2.5">
+            <h2 id="advice-title" className="text-[15px] font-bold text-brand-ink">
+              Gợi ý cho trường hợp của bạn
+            </h2>
             <ol className="flex flex-col gap-2.5">
               {steps.map((r, i) => (
                 <li key={r} className="flex items-start gap-3">
@@ -159,34 +228,8 @@ export function Verdict({ report, pairs, unresolved, onOpenPair, onFixDrug, bigT
                   <span className="pt-0.5">{r}</span>
                 </li>
               ))}
-              {missing > 0 && (
-                <li className="flex items-start gap-3">
-                  <Num n={steps.length + 1} />
-                  <span className="pt-0.5">
-                    <button type="button" onClick={onFixDrug} className="text-left font-semibold text-primary underline underline-offset-2">
-                      Sửa tên hoặc thành phần của {join(unresolved.map((u) => `“${u}”`))}
-                    </button>{" "}
-                    để kiểm tra nốt {missing} cặp còn lại.
-                  </span>
-                </li>
-              )}
             </ol>
-          </>
-        )}
-        {pairs.length > 1 && (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2 pt-1">
-          {tally.map((t) => (
-            <button
-              key={t.label}
-              type="button"
-              onClick={() => t.first && onOpenPair(t.first.id)}
-              className={cn("flex flex-col rounded-xl border px-3.5 py-2.5 text-left transition-colors hover:border-foreground", t.className)}
-            >
-              <span className="text-2xl leading-tight font-bold tabular-nums">{t.n}</span>
-              <span className="text-[13px] font-semibold">{t.label}</span>
-            </button>
-          ))}
-        </div>
+          </section>
         )}
       </div>
     </section>

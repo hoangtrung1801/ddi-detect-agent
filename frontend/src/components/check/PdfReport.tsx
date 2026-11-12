@@ -125,7 +125,7 @@ export function PdfReport({ report, pairs, drugs, unresolved, qr, generatedAt }:
 
         {report.recommendations.length > 0 && (
           <Block className="flex flex-col gap-1.5">
-            <div className="text-[14px] font-bold text-[#0B4C50]">Việc bạn nên làm</div>
+            <div className="text-[14px] font-bold text-[#0B4C50]">Gợi ý cho trường hợp của bạn</div>
             <ol className="flex flex-col gap-1">
               {report.recommendations.map((r, i) => (
                 <li key={r} className="flex gap-2">

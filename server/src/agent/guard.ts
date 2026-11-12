@@ -217,7 +217,7 @@ export async function buildReport(draft: ReportDraft, ctx: RunContext): Promise<
     drugs,
     pairs,
     overall_risk: overallRisk(pairs),
-    recommendations: draft.recommendations.map((s) => s.trim()).filter(Boolean),
+    recommendations: draft.recommendations.map((s) => s.trim()).filter(Boolean).slice(0, 4),
     links,
     ...(Object.keys(drugProfiles).length ? { drug_profiles: drugProfiles } : {}),
     ...(Object.keys(sources).length ? { sources } : {}),

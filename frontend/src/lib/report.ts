@@ -204,7 +204,8 @@ export type ProgressEvent =
 /** One visual category per pair: interaction severities plus the two "unknown" states. */
 export type PairKind = Severity | "unknown" | "no_record" | "unresolved";
 
-export const KIND_ORDER: PairKind[] = ["major", "unknown", "moderate", "minor", "no_record", "unresolved"];
+/** Most serious first; an interaction of unknown severity ranks after minor, before pairs without a record. */
+export const KIND_ORDER: PairKind[] = ["major", "moderate", "minor", "unknown", "no_record", "unresolved"];
 
 export interface KindMeta {
   label: string;

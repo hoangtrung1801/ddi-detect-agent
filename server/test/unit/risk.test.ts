@@ -7,6 +7,12 @@ describe('overallRisk', () => {
     expect(overallRisk([{ status: 'interaction', severity: 'moderate' }, { status: 'no_record' }])).toBe('medium');
     expect(overallRisk([{ status: 'interaction', severity: 'minor' }])).toBe('low');
   });
+  it('DDInter Unknown ranks below minor: known severities win, unknown only when nothing is known', () => {
+    const unknown = { status: 'interaction' as const, severity_source: 'DDInter 2.0' as const };
+    expect(overallRisk([unknown, { status: 'interaction', severity: 'moderate' }])).toBe('medium');
+    expect(overallRisk([unknown, { status: 'interaction', severity: 'minor' }])).toBe('low');
+    expect(overallRisk([unknown, { status: 'no_record' }])).toBe('unknown');
+  });
   it('missing severity counts as medium', () => {
     expect(overallRisk([{ status: 'interaction' }])).toBe('medium');
   });

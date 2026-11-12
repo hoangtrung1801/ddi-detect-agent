@@ -13,7 +13,8 @@ const FROM_SEVERITY: Record<Severity, OverallRisk> = { minor: 'low', moderate: '
 
 /**
  * Overall risk, computed in code.
- * - any interaction: highest known severity; DDInter Unknown stays unknown unless a major risk is known;
+ * - any interaction: highest known severity; DDInter Unknown ranks below minor, so it is `unknown` only when no
+ *   severity is known (it never lowers or hides a known risk);
  * - no interaction, but some pair is `no_record`/`unresolved`: `unknown` (absence from the database is not safety);
  * - nothing to flag at all (no pairs): `none`.
  */
@@ -29,8 +30,8 @@ export function overallRisk(pairs: RiskPair[]): OverallRisk {
     const r = p.severity ? FROM_SEVERITY[p.severity] : 'medium';
     if (best === null || RANK[r] > RANK[best]) best = r;
   }
-  if (unknownSourceRisk && best !== 'high') return 'unknown';
   if (best) return best;
+  if (unknownSourceRisk) return 'unknown';
   if (pairs.some((p) => p.status === 'no_record' || p.status === 'unresolved')) return 'unknown';
   return 'none';
 }

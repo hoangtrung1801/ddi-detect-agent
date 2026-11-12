@@ -199,7 +199,7 @@ export const ReportDraftSchema = Type.Object({
       description: 'One profile per active ingredient that takes part in an INTERACTION pair (not for drugs that only have NO_RECORD/UNRESOLVED pairs)',
     }),
   ),
-  recommendations: Type.Array(Type.String({ description: 'Vietnamese practical recommendations' })),
+  recommendations: Type.Array(Type.String({ description: 'Vietnamese suggestion specific to the interactions found: names the drugs and a concrete action (sign to watch, test, timing, combination to raise with the prescriber); never generic advice' })),
 });
 export type ReportDraft = Static<typeof ReportDraftSchema>;
 

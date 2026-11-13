@@ -15,9 +15,14 @@ const Params = Type.Object({
 export function formatPair(p: PairResult): string {
   const note = p.checked === undefined ? '' : ` [${p.checked} ingredient pairs checked${p.unmatched?.length ? `; no database match for: ${p.unmatched.join(', ')}` : ''}]`;
   if (p.status === 'interaction') {
-    const evidence = (p.sourceRecords ?? []).flatMap((r) => (r.details ?? []).map((d) =>
-      `\nSOURCE ${d.url} [${d.drugAName} + ${d.drugBName}; page risk=${d.level}; CSV risk=${r.level}; retrieved=${d.retrievedAt}]\nMechanism categories: ${d.mechanisms.join(', ') || 'not provided'}\nManagement (source quote): ${d.management ?? 'not provided'}\nReferences: ${d.references.join(' | ') || 'not provided'}`
-    )).join('\n');
+    const evidence = (p.sourceRecords ?? []).flatMap((r) => {
+      const imported = r.origin === 'website-listing' ? 'listing risk' : 'CSV risk';
+      if (!r.details?.length && r.origin === 'website-listing') {
+        return [`\nSOURCE ${r.url} [DDInter 2.0 website interaction listing, not the CSV export; ${imported}=${r.level}; retrieved=${r.retrievedAt ?? 'unknown'}]\nMechanism categories: not provided\nManagement (source quote): not provided\nReferences: not provided`];
+      }
+      return (r.details ?? []).map((d) =>
+        `\nSOURCE ${d.url} [${d.drugAName} + ${d.drugBName}; page risk=${d.level}; ${imported}=${r.level}; retrieved=${d.retrievedAt}]\nMechanism categories: ${d.mechanisms.join(', ') || 'not provided'}\nManagement (source quote): ${d.management ?? 'not provided'}\nReferences: ${d.references.join(' | ') || 'not provided'}`);
+    }).join('\n');
     return p.ingredientPairs
       ? `INTERACTION  ${p.a} + ${p.b}${note}:\n${p.ingredientPairs.map((i) => `  - ${i.a} + ${i.b}: ${i.condition}`).join('\n')}${evidence}`
       : `INTERACTION  ${p.a} + ${p.b}: ${p.condition}${evidence}`;

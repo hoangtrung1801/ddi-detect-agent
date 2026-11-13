@@ -12,6 +12,20 @@ export interface BuildStats {
   names: string[];
 }
 
+/** Highest graded level; an Unknown record keeps the pair ungraded unless another record is Major. */
+export function sourceSeverity(levels: string[]): Severity | null {
+  const rank = { minor: 1, moderate: 2, major: 3 };
+  let severity: Severity | null = null;
+  for (const level of levels) {
+    const s = level.toLowerCase();
+    if (s === 'major' || s === 'moderate' || s === 'minor') {
+      if (!severity || rank[s] > rank[severity]) severity = s;
+    }
+  }
+  if (levels.includes('Unknown') && severity !== 'major') severity = null;
+  return severity;
+}
+
 /** Pair lookup is unordered; distinct descriptions and source evidence are never overwritten. */
 export function buildDdiDb(db: Database, rows: InteractionRow[]): BuildStats {
   db.exec(`
@@ -68,21 +82,13 @@ export function buildDdiDb(db: Database, rows: InteractionRow[]): BuildStats {
   const insDrug = db.prepare('INSERT INTO drugs(id,name,name_norm,source_id) VALUES (?,?,?,?)');
   const insEdge = db.prepare('INSERT INTO interactions(a,b,src_a,condition,source_records,source_severity) VALUES (?,?,?,?,?,?)');
   const insRecord = db.prepare('INSERT INTO interaction_records(a,b,src_a,condition,level,drug_a_id,drug_b_id,source_rows) VALUES (?,?,?,?,?,?,?,?)');
-  const rank = { minor: 1, moderate: 2, major: 3 };
   db.transaction(() => {
     names.forEach((n, i) => insDrug.run(i + 1, n, normName(n), sourceIds.get(i + 1) ?? null));
     for (const e of edges.values()) {
       const sourceRecords: SourceInteractionRecord[] = e.rows.filter((r) => r.drug_1_id && r.drug_2_id && r.level).map((r) => ({
         source: DDINTER.source, drugAId: r.drug_1_id!, drugBId: r.drug_2_id!, level: r.level!, url: DDINTER.downloads,
       }));
-      let severity: Severity | null = null;
-      for (const r of sourceRecords) {
-        const s = r.level.toLowerCase();
-        if (s === 'major' || s === 'moderate' || s === 'minor') {
-          if (!severity || rank[s] > rank[severity]) severity = s;
-        }
-      }
-      if (sourceRecords.some((r) => r.level === 'Unknown') && severity !== 'major') severity = null;
+      const severity = sourceSeverity(sourceRecords.map((r) => r.level));
       insEdge.run(e.a, e.b, e.src, [...new Set(e.rows.map((r) => r.condition))].join('\n'), JSON.stringify(sourceRecords), severity);
       for (const r of e.rows) insRecord.run(e.a, e.b, ids.get(normName(r.drug_1))!, r.condition, r.level ?? null, r.drug_1_id ?? null, r.drug_2_id ?? null, r.source_rows ?? null);
     }

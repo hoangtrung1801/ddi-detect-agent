@@ -5,9 +5,9 @@ import Database from 'better-sqlite3';
 import { crawlInteractionDetails, crawlStatus } from '../src/domain/ddinter-crawler.ts';
 
 const args = process.argv.slice(2).filter((a) => a !== '--');
-const allowed = ['--status', '--max-pages=', '--page-ids=', '--concurrency=', '--interval-ms='];
+const allowed = ['--status', '--max-pages=', '--page-ids=', '--listing-pages', '--listing-pages=', '--concurrency=', '--interval-ms='];
 if (args.some((a) => !allowed.some((prefix) => prefix.endsWith('=') ? a.startsWith(prefix) : a === prefix))) {
-  throw new Error('Usage: pnpm data:crawl [--status] [--max-pages=N] [--page-ids=23,24] [--concurrency=N] [--interval-ms=N]');
+  throw new Error('Usage: pnpm data:crawl [--status] [--max-pages=N] [--page-ids=23,24 | --listing-pages[=Major,Moderate]] [--concurrency=N] [--interval-ms=N]');
 }
 const data = process.env.DATA_DIR ?? fileURLToPath(new URL('../data', import.meta.url));
 const database = process.env.DDI_DB_PATH ?? `${data}/ddi.sqlite`;
@@ -33,7 +33,22 @@ if (args.includes('--status')) {
   const concurrency = numberFlag('concurrency', 1);
   const intervalMs = numberFlag('interval-ms', 0);
   const ids = args.find((a) => a.startsWith('--page-ids='))?.split('=')[1];
-  const pageIds = ids?.split(',').map(Number);
+  let pageIds = ids?.split(',').map(Number);
+  const listing = args.find((a) => a === '--listing-pages' || a.startsWith('--listing-pages='));
+  if (listing) {
+    // Detail pages for website-listed pairs (absent from the CSV export) that have no crawled page yet.
+    if (pageIds) throw new Error('Use either --page-ids or --listing-pages');
+    const levels = listing.includes('=') ? new Set(listing.split('=')[1]!.split(',')) : null;
+    const db = new Database(database, { readonly: true });
+    const rows = db.prepare(`SELECT i.source_records FROM interactions i WHERE i.source_records LIKE '%"origin":"website-listing"%'
+      AND NOT EXISTS (SELECT 1 FROM interaction_details d WHERE d.a=i.a AND d.b=i.b)`).all() as { source_records: string }[];
+    db.close();
+    pageIds = [...new Set(rows.flatMap((r) => (JSON.parse(r.source_records) as { origin?: string; level: string; url: string }[])
+      .filter((x) => x.origin === 'website-listing' && (!levels || levels.has(x.level)))
+      .map((x) => Number(x.url.match(/\/interact\/(\d+)\/$/)?.[1]))))].sort((x, y) => x - y);
+    if (maxPages !== undefined) pageIds = pageIds.slice(0, maxPages);
+    console.log(`Fetching ${pageIds.length} interaction pages for website-listed pairs.`);
+  }
   if (pageIds?.some((id) => !Number.isSafeInteger(id) || id < 1)) throw new Error('--page-ids must contain positive integer IDs');
   mkdirSync(dirname(archivePath), { recursive: true });
   const lockPath = `${archivePath}.lock`;

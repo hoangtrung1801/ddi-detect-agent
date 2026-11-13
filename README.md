@@ -6,7 +6,7 @@ A Python-based graph data structure for efficiently storing and searching drug-d
 
 ## Current TypeScript server and DDInter 2.0 data
 
-The active `server/` backend uses the official [DDInter 2.0 category CSV exports](https://ddinter2.scbdd.com/download/). The earlier Python examples below are historical; their prebuilt GraphML, pickle, and NumPy artifacts are not used by the TypeScript server and were not migrated.
+The active `server/` backend uses the official [DDInter 2.0 category CSV exports](https://ddinter2.scbdd.com/download/), supplemented with pairs the exports omit, taken from DDInter's per-drug interaction listings (see below). The earlier Python examples below are historical; their prebuilt GraphML, pickle, and NumPy artifacts are not used by the TypeScript server and were not migrated.
 
 From `server/`:
 
@@ -30,7 +30,7 @@ Stop running backend processes before rebuilding, and restart them afterward: an
 - Report `source_records` carries DDInter IDs and risk levels. `severity_source` distinguishes DDInter from model estimates. Known DDInter severity overrides AI guesses; Unknown is not converted to minor/moderate. A grouped pair with Unknown and lower known risks remains unknown unless a major risk is established. Absence of a record never proves safety.
 - Aliases for thiamine/B1, riboflavin/B2, and ubidecarenone/CoQ10 were removed because their targets are absent from the downloaded catalog; they are no longer guaranteed alias matches. Generic Vitamin D maps to the catalog's `Vitamin D`, while D3 maps to `Cholecalciferol`.
 - Vector-only matching does not expand a broad input into a longer name with that exact prefix (for example, `Insulin` must not silently become `Insulin detemir`). Explicit forms and supported aliases still resolve. This is a conservative specificity check, not clinical validation of all name matches.
-- Coverage gaps are real: the downloaded subset has no record for `Fluoxetine + Tramadol` or `Digoxin + Furosemide`, despite both drug names being available. The golden evaluation cases now reflect the imported subset, not a claim of clinical absence.
+- The category exports alone had no record for `Fluoxetine + Tramadol`, `Digoxin + Furosemide` or `Sildenafil + Nitroglycerin`; these come from the website-listing supplement below (Major, Moderate and Major). After the supplement the database holds **295,164 pairs and 2,276 drugs** (160,235 pairs from the CSV exports + 134,929 from the listings; 1,939 + 337 drugs). Absence of a record is still not a claim of clinical safety.
 
 **Data license and attribution:** DDInter 2.0, curated by the DDInter team, <https://ddinter2.scbdd.com/>. Data and the processed derivative are provided under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/), subject to [DDInter terms](https://ddinter2.scbdd.com/terms/); this migration deduplicates category exports and adds provenance and labelled risk summaries. The software license does not override the dataset license. Do not use the data commercially without appropriate permission. DDInter and this application do not guarantee completeness or clinical accuracy.
 
@@ -67,6 +67,21 @@ Back up `server/data/app.sqlite` using SQLite's backup API before maintenance; i
 
 Deployment verification: the production Pages URL returns HTTP 200 and renders in Chromium. The public API `/health` returns HTTP 200 with `agent_loaded: true` and allows the production Pages origin through CORS. A real browser check of Warfarin + Ibuprofen completed through `/v2/interactions/stream` (HTTP 200), rendering a Major interaction report with DDInter evidence and AI-generated explanation. The tunnel reports four ready connections. Image extraction, follow-up chat, and cabinet persistence were not exercised by this deployment smoke check.
 
+### Add pairs the category exports omit (website listings)
+
+The eight category CSVs only contain pairs where at least one drug is in ATC group A, B, D, H, L, P, R or V. A pair such as Sildenafil (G04) + Nitroglycerin (C01), a contraindication, is therefore absent from every export even though DDInter records it. From `server/`:
+
+```sh
+pnpm data:listings
+pnpm data:listings:status
+pnpm data:listings:apply
+pnpm data:crawl --listing-pages=Major
+```
+
+- `data:listings` reads each drug's public interaction listing (`/server/interact-with/<drug-id>/`, the table behind its drug page), seeded with every catalog drug and following any partner the site names, so pairs between two drugs absent from the exports are found too. Each row gives the partner's DDInter ID and name, the interaction page id and the risk level. It uses the same polite client as `data:crawl` (shared request clock, default one start per 500 ms and 2 in flight, retry with backoff, hard stop on 401/403 and on 429 with the Retry-After deadline recorded). `server/data/ddinter/listings.sqlite` checkpoints every listing page with its SHA-256 and retrieval time; rerun to resume.
+- The listing encodes the level as 0–3. It maps to Unknown/Minor/Moderate/Major; this was checked against the CSV level of every pair present in both and against the level badge of interaction pages. Any other value stops the crawl.
+- `data:listings:apply` (crawl must be `completed`) adds only listed pairs that are not already in the database, with the listed level and nothing else. Existing CSV pairs and their severity are never changed; level disagreements are only counted. Each added record has `origin: "website-listing"`, `url` = the interaction page, `listingUrl` = the drug page that listed it, and `retrievedAt`. Partners absent from the catalog are added as new drugs under DDInter's name and ID, and their name embeddings are appended to `drug-names.json`/`drug-vectors.f32`. A new name that normalizes to an existing drug with a different DDInter ID is skipped, not merged. The counts are stored in SQLite `dataset_metadata` (`supplement`) and in `manifest.json`. `data:build` re-applies a completed listing archive automatically.
+- `data:crawl --listing-pages[=Major,Moderate,...]` then fetches interaction detail pages (description, management, references) for added pairs that have none yet, using the explicit-page mode below.
 
 ### Enrich only current interaction pairs
 
@@ -79,18 +94,17 @@ pnpm data:crawl:status
 
 `data:crawl` runs until discovery and the pending queue are exhausted or the process is stopped. It is a long-running foreground command; keep the machine awake. A single process starts requests on a shared clock (default one every 250 ms, at most 6 in flight, in a rolling pool) and respects access denials, robots restrictions, and HTTP 429 Retry-After deadlines; the first 403 or 429 halts all in-flight workers. Tune with `--concurrency=N` and `--interval-ms=N` (e.g. `pnpm data:crawl --concurrency=1 --interval-ms=1000` for the original one-request-per-second pace). DDInter publishes no crawl-rate rules, so keep the load modest. It uses direct HTTP, not browser automation or guessed sequential page bounds.
 
-- The target snapshot is the existing catalog: **160,235 unordered drug pairs**. A greedy endpoint cover selects 906 current drug IDs for public, paginated `/server/interact-with/<drug-id>/` discovery. Only page IDs matching current source-ID pairs are queued for `/server/interact/<id>/`; out-of-catalog pairs are not imported.
+- The target snapshot is the current catalog (**160,235 unordered drug pairs** when first crawled; 295,164 after the listing supplement, which needs a new archive path or the explicit `--listing-pages` mode). For the original catalog a greedy endpoint cover selected 906 drug IDs for public, paginated `/server/interact-with/<drug-id>/` discovery. Only page IDs matching current source-ID pairs are queued for `/server/interact/<id>/`; out-of-catalog pairs are not imported.
 - `server/data/ddinter/crawl.sqlite` checkpoints discovery offsets, queued/completed/missing/error pages, compressed source HTML, parsed evidence, page URLs, retrieval times, and SHA-256 hashes. An exclusive PID lock prevents duplicate crawler instances. Resume with the same command after interruption; completed pages are not downloaded again. The archive is tied to the exact target catalog.
 - Each verified page is applied immediately to `interaction_details` in `server/data/ddi.sqlite`, keyed by source drug IDs. Drug names, pair membership, original CSV evidence, and imported severity are not replaced. Multiple website records for the same pair are retained.
 - Extracted fields are the pair's interaction description, mechanism categories, management text, and references. A source `-` stays null. Alternative-drug lists and generic CYP footer advice are deliberately excluded; they are not personalized management guidance.
 - Reports expose crawled evidence in `source_records[].details`, including per-page risk levels. Page/CSV risk disagreements remain visible; the imported CSV severity is not silently changed. The UI distinguishes source quotes from AI interpretation.
 - Restart an already-running backend once to load the new lookup implementation/database handle. Subsequent successful imports become visible on new lookups without restarting it.
 - Ctrl+C pauses a foreground crawl safely. For a background crawler, send SIGINT to the PID recorded in `server/data/ddinter/crawl.sqlite.lock`. Stop the crawler before `pnpm data:build`; rebuilding refuses while its lock is present and restores completed evidence from the archive into the staged database.
-- For a bounded run after stopping any active crawler: `pnpm data:crawl --max-pages=10`. A specific known page can be checked with `pnpm data:crawl --page-ids=23`, but it must map to a current pair. Neither mode claims full enrichment.
+- For a bounded run after stopping any active crawler: `pnpm data:crawl --max-pages=10`. A specific known page can be checked with `pnpm data:crawl --page-ids=23`, but it must map to a current pair. Explicit pages (`--page-ids`, `--listing-pages`) are fetched with the same concurrency and pacing as a full crawl. Neither mode claims full enrichment.
 - `completed` means all target pairs have at least one successfully fetched page and discovery is exhausted. `completed_with_gaps` means discovery finished but targets/pages remain missing; `paused` and `error` are not completion. Use live status counts rather than assuming every pair has already been enriched.
 
-The category CSV coverage limit and CC BY-NC-SA 4.0 restrictions above still apply. Crawling existing pairs adds source annotations, not new interaction coverage or a claim of clinical validation.
-
+The CC BY-NC-SA 4.0 restrictions above still apply. Crawling existing pairs adds source annotations, not new interaction coverage or a claim of clinical validation.
 
 ## Features
 
@@ -123,6 +137,7 @@ Python 3.7 or higher is required.
 igraph can be tricky to install depending on your system. Here are the recommended approaches:
 
 **Option 1: Using pip (recommended)**
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -130,17 +145,20 @@ pip install -r requirements.txt
 **Option 2: If you encounter issues with igraph installation**
 
 On macOS:
+
 ```bash
 brew install igraph
 pip install python-igraph
 ```
 
 On Ubuntu/Debian:
+
 ```bash
 sudo apt-get install python3-igraph
 ```
 
 On Windows:
+
 - Download precompiled wheels from [Christoph Gohlke's page](https://www.lfd.uci.edu/~gohlke/pythonlibs/#python-igraph)
 - Or use: `pip install python-igraph`
 
@@ -175,6 +193,7 @@ for interaction in interactions:
 ### Loading Data from Files
 
 **CSV Format:**
+
 ```csv
 drug1,drug2,condition
 Warfarin,Aspirin,Increased bleeding risk
@@ -187,10 +206,19 @@ graph.load_from_csv("interactions.csv")
 ```
 
 **JSON Format:**
+
 ```json
 [
-  {"drug1": "Warfarin", "drug2": "Aspirin", "condition": "Increased bleeding risk"},
-  {"drug1": "Metformin", "drug2": "Alcohol", "condition": "Lactic acidosis risk"}
+  {
+    "drug1": "Warfarin",
+    "drug2": "Aspirin",
+    "condition": "Increased bleeding risk"
+  },
+  {
+    "drug1": "Metformin",
+    "drug2": "Alcohol",
+    "condition": "Lactic acidosis risk"
+  }
 ]
 ```
 
@@ -206,6 +234,7 @@ python example_usage.py
 ```
 
 This will demonstrate:
+
 - Loading data from CSV
 - Searching for specific interactions
 - Getting all interactions for a drug
@@ -219,6 +248,7 @@ python visualize_graph.py
 ```
 
 This creates multiple visualizations:
+
 - Basic network visualization
 - Highlighted drug interactions
 - Different layout styles (spring, circular)
@@ -238,6 +268,7 @@ An intelligent conversational agent powered by OpenAI and LangChain that uses th
 ### Setup
 
 1. **Install Dependencies**:
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -245,6 +276,7 @@ pip install -r requirements.txt
 2. **Configure OpenAI API Key**:
 
 Create a `.env` file in the project root:
+
 ```bash
 OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_MODEL=gpt-3.5-turbo
@@ -252,6 +284,7 @@ DATA_FILE=TWOSIDES_preprocessed.csv
 ```
 
 Or export the environment variable:
+
 ```bash
 export OPENAI_API_KEY="your_openai_api_key_here"
 ```
@@ -265,6 +298,7 @@ python drug_agent_cli.py
 ```
 
 **Example Conversation**:
+
 ```
 You: What happens if I take Warfarin and Aspirin together?
 Agent: [Provides interaction information]
@@ -277,6 +311,7 @@ Agent: [Uses conversation context to provide relevant answer]
 ```
 
 **Available Commands**:
+
 - `/exit` or `/quit` - Exit the application
 - `/clear` - Clear conversation history
 - `/stats` - Show database statistics
@@ -285,11 +320,13 @@ Agent: [Uses conversation context to provide relevant answer]
 ### Using the REST API
 
 1. **Start the API Server**:
+
 ```bash
 python drug_agent_api.py
 ```
 
 Or using uvicorn directly:
+
 ```bash
 uvicorn drug_agent_api:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -303,6 +340,7 @@ The API will be available at `http://localhost:8000`
 3. **API Endpoints**:
 
 **Simple Query** (no session management):
+
 ```bash
 curl -X POST "http://localhost:8000/query" \
   -H "Content-Type: application/json" \
@@ -310,6 +348,7 @@ curl -X POST "http://localhost:8000/query" \
 ```
 
 **Chat with Session** (maintains conversation history):
+
 ```bash
 # First message
 curl -X POST "http://localhost:8000/chat" \
@@ -323,16 +362,19 @@ curl -X POST "http://localhost:8000/chat" \
 ```
 
 **Get Statistics**:
+
 ```bash
 curl -X GET "http://localhost:8000/stats"
 ```
 
 **Health Check**:
+
 ```bash
 curl -X GET "http://localhost:8000/health"
 ```
 
 **Clear Session**:
+
 ```bash
 curl -X DELETE "http://localhost:8000/chat/{session_id}"
 ```
@@ -370,16 +412,19 @@ print(f"Drugs: {stats['drugs']}, Interactions: {stats['interactions']}")
 The agent can handle various types of natural language questions:
 
 **Specific Drug Pairs**:
+
 - "What happens if I take Warfarin and Aspirin together?"
 - "Can I combine Ibuprofen with Alcohol?"
 - "Is there an interaction between Metformin and Insulin?"
 
 **Single Drug Interactions**:
+
 - "Show me all interactions for Warfarin"
 - "What drugs interact with Metformin?"
 - "List all interactions for Aspirin"
 
 **Conversational Follow-ups**:
+
 - "What about other blood thinners?" (after discussing Warfarin)
 - "Are there any other concerns?" (continuing previous context)
 - "Is it dangerous?" (referring to previously mentioned interaction)
@@ -387,18 +432,21 @@ The agent can handle various types of natural language questions:
 ### Agent Architecture
 
 The agent uses:
+
 - **LangChain**: Agent framework with tool selection
 - **OpenAI GPT**: Language model for understanding and generation
 - **DrugInteractionGraph**: Knowledge base for drug interactions
 - **ConversationBufferMemory**: Maintains conversation history
 
 **Tools Available to Agent**:
+
 1. `SearchDrugInteraction`: Search interaction between two specific drugs
 2. `GetAllDrugInteractions`: Get all interactions for a single drug
 
 ### Configuration Options
 
 **Environment Variables**:
+
 ```bash
 OPENAI_API_KEY=sk-...           # Required: Your OpenAI API key
 OPENAI_MODEL=gpt-3.5-turbo      # Optional: Model selection (gpt-3.5-turbo or gpt-4)
@@ -409,6 +457,7 @@ API_RELOAD=true                 # Optional: Auto-reload on code changes
 ```
 
 **Model Selection**:
+
 - `gpt-3.5-turbo`: Faster, more cost-effective (recommended for most use cases)
 - `gpt-4`: More capable, higher accuracy (recommended for complex queries)
 
@@ -446,6 +495,7 @@ fig = graph.visualize_interactive(
 ```
 
 The interactive visualization includes:
+
 - Hover over nodes to see drug details and interactions
 - Zoom and pan functionality
 - Color-coded nodes by number of connections
@@ -456,69 +506,90 @@ The interactive visualization includes:
 ### `DrugInteractionGraph`
 
 #### `__init__()`
+
 Initialize an empty drug interaction graph.
 
 #### `add_interaction(drug1: str, drug2: str, condition: str) -> None`
+
 Add a drug-drug interaction. If the interaction already exists, updates the condition.
 
 **Parameters:**
+
 - `drug1`: First drug name
 - `drug2`: Second drug name
 - `condition`: Interaction condition/effect
 
 #### `load_from_csv(filepath: str) -> int`
+
 Load interactions from a CSV file.
 
 **Parameters:**
+
 - `filepath`: Path to CSV file (format: drug1,drug2,condition)
 
 **Returns:**
+
 - Number of interactions loaded
 
 #### `load_from_json(filepath: str) -> int`
+
 Load interactions from a JSON file.
 
 **Parameters:**
+
 - `filepath`: Path to JSON file
 
 **Returns:**
+
 - Number of interactions loaded
 
 #### `search_interaction(drug1: str, drug2: str) -> Optional[str]`
+
 Search for an interaction between two specific drugs.
 
 **Parameters:**
+
 - `drug1`: First drug name (case-insensitive)
 - `drug2`: Second drug name (case-insensitive)
 
 **Returns:**
+
 - Condition string if interaction exists, None otherwise
 
 #### `get_all_interactions_for_drug(drug_name: str) -> List[Dict[str, str]]`
+
 Get all interactions for a specific drug.
 
 **Parameters:**
+
 - `drug_name`: Name of the drug (case-insensitive)
 
 **Returns:**
+
 - List of dictionaries with keys: 'drug', 'condition'
 
 #### `get_stats() -> Dict[str, int]`
+
 Get graph statistics.
 
 **Returns:**
+
 - Dictionary with 'drugs' (vertex count) and 'interactions' (edge count)
 
 #### `export_to_graphml(filepath: str) -> None`
+
 Export graph to GraphML format for visualization in tools like Gephi, Cytoscape, or yEd.
 
 **Parameters:**
+
 - `filepath`: Path to output GraphML file
 
 #### `visualize(highlight_drug=None, layout='auto', save_path=None, figsize=(12, 10), show_labels=True)`
+
 Create a static visualization using matplotlib.
 
 **Parameters:**
+
 - `highlight_drug`: Optional drug name to highlight with its connections
 - `layout`: Layout algorithm ('auto', 'circle', 'kamada_kawai', 'spring', 'random')
 - `save_path`: Optional path to save the PNG image
@@ -526,16 +597,20 @@ Create a static visualization using matplotlib.
 - `show_labels`: Whether to show drug names as labels
 
 **Returns:**
+
 - matplotlib figure object
 
 #### `visualize_interactive(highlight_drug=None, save_path=None)`
+
 Create an interactive visualization using Plotly.
 
 **Parameters:**
+
 - `highlight_drug`: Optional drug name to highlight with its connections
 - `save_path`: Optional path to save the HTML file
 
 **Returns:**
+
 - plotly figure object
 
 ## Performance
@@ -548,6 +623,7 @@ The graph uses igraph's efficient C-based backend along with an auxiliary Python
 - **Load from file**: O(n) where n is the number of interactions
 
 Typical performance on a modern laptop:
+
 - ~1000 searches per millisecond
 - Handles 100k+ interactions efficiently
 - Minimal memory overhead
@@ -571,6 +647,7 @@ Software: MIT License. **DDInter data and its processed derivatives are separate
 ## Contributing
 
 Contributions are welcome! Areas for potential enhancement:
+
 - Support for interaction severity levels
 - Multiple conditions per interaction
 - Drug class/category grouping
@@ -586,6 +663,7 @@ After exporting to GraphML, you can also use external tools:
 - **yEd**: Free diagram editor ([yworks.com/yed](https://www.yworks.com/products/yed))
 
 Example workflow:
+
 1. Export: `graph.export_to_graphml("interactions.graphml")`
 2. Open the file in your visualization tool
 3. Apply layout algorithms (force-directed, circular, etc.)

@@ -58,6 +58,11 @@ export async function gatherEvidence(ctx: RunContext, pairs: PairResult[]): Prom
   const blocks: string[] = [];
   for (const p of pairs) {
     if (p.status !== 'interaction') continue;
+    for (const r of (p.sourceRecords ?? []).filter((r) => r.origin === 'website-listing' && !r.details?.length)) {
+      // Pairs the CSV export omits: the listing gives the level and page, but no description or management.
+      const s = ctx.addSource({ kind: 'ddinter', title: `DDInter 2.0 #${r.url.match(/interact\/(\d+)/)?.[1] ?? ''}: ${p.a} + ${p.b}`, url: r.url, publisher: 'DDInter 2.0', ...(r.retrievedAt ? { retrievedAt: r.retrievedAt } : {}), link: 'direct' });
+      blocks.push(`[${s.id}] ${s.title} (${s.url})\n  Level: ${r.level} (DDInter website interaction listing; not in the CSV export)\n  Description: not provided\n  Management: not provided`);
+    }
     for (const d of (p.sourceRecords ?? []).flatMap((r) => r.details ?? [])) {
       const s = ctx.addSource({ kind: 'ddinter', title: `DDInter 2.0 #${d.pageId}: ${d.drugAName} + ${d.drugBName}`, url: d.url, publisher: 'DDInter 2.0', retrievedAt: d.retrievedAt, link: 'direct' });
       const refs = d.references.map((ref) => ctx.addSource({ kind: 'literature', title: ref, publisher: 'Tài liệu DDInter trích dẫn', ...literatureLink(ref) }));

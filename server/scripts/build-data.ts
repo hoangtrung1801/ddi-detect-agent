@@ -7,12 +7,14 @@ import { buildDdiDb } from '../src/domain/build-db.ts';
 import { createTransformersEmbedder } from '../src/domain/embedder.ts';
 import { parseInteractionCsv } from '../src/util/csv.ts';
 import { applyInteractionDetail } from '../src/domain/ddinter-details.ts';
+import { applyListingSupplement, listingCrawlStatus, readListingEntries } from '../src/domain/ddinter-listings.ts';
 
 const csvPath = fileURLToPath(new URL('../../db_drug_interactions.csv', import.meta.url));
 const outDir = process.env.DATA_DIR ?? fileURLToPath(new URL('../data', import.meta.url));
 const manifestPath = `${outDir}/ddinter/manifest.json`;
 const archivePath = `${outDir}/ddinter/crawl.sqlite`;
-if (existsSync(`${archivePath}.lock`)) throw new Error('Stop the DDInter crawler before rebuilding the database; resume it afterward.');
+const listingsPath = `${outDir}/ddinter/listings.sqlite`;
+if (existsSync(`${archivePath}.lock`) || existsSync(`${listingsPath}.lock`)) throw new Error('Stop the DDInter crawlers before rebuilding the database; resume them afterward.');
 if (!existsSync(manifestPath)) throw new Error('Missing DDInter source manifest. Run pnpm data:download first.');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 const csv = readFileSync(csvPath, 'utf8');
@@ -30,6 +32,22 @@ try {
   const stats = buildDdiDb(db, rows);
   if (stats.drugs !== manifest.drugs) throw new Error('Drug count differs from source manifest');
   db.prepare('INSERT INTO dataset_metadata(key,value) VALUES (?,?)').run('manifest', JSON.stringify(manifest));
+  // Pairs the website lists but the category CSV exports omit; applied before page details so those can attach.
+  if (existsSync(listingsPath)) {
+    const listings = new Database(listingsPath, { readonly: true });
+    try {
+      const status = listingCrawlStatus(listings);
+      const { entries, complete } = readListingEntries(listings);
+      if (!complete || status.state !== 'completed') throw new Error(`Listing crawl is ${status.state}; finish it (pnpm data:listings) or move ${listingsPath} aside`);
+      const supplement = applyListingSupplement(db, entries);
+      db.prepare('INSERT INTO dataset_metadata(key,value) VALUES (?,?)').run('supplement', JSON.stringify({ archive: 'ddinter/listings.sqlite', crawledDrugs: status.queuedDrugs, listingEntries: status.entries, appliedAt: new Date().toISOString(), ...supplement }));
+      if (manifest.supplement && (manifest.supplement.addedPairs !== supplement.addedPairs || manifest.supplement.addedDrugs !== supplement.addedDrugs)) throw new Error('Listing supplement differs from source manifest');
+      stats.names.push(...supplement.addedDrugNames);
+      stats.drugs += supplement.addedDrugs;
+      stats.interactions += supplement.addedPairs;
+      console.log(`Added ${supplement.addedPairs} website-listed pairs and ${supplement.addedDrugs} drugs.`);
+    } finally { listings.close(); }
+  }
   if (existsSync(archivePath)) {
     const archive = new Database(archivePath, { readonly: true });
     let applied = 0;

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { setTimeout as sleep } from 'node:timers/promises';
 import { gzipSync } from 'node:zlib';
 import Database from 'better-sqlite3';
+import { createDdinterClient } from './ddinter-client.ts';
 import { applyInteractionDetail, createInteractionDetailsTable, parseInteractionPage } from './ddinter-details.ts';
 
 interface Target { a: number; b: number; source_a: string; source_b: string }
@@ -108,52 +108,12 @@ export async function crawlInteractionDetails(options: CrawlOptions): Promise<Cr
   const targetByPair = new Map(targets.map((t) => [[t.source_a, t.source_b].sort().join('|'), t]));
   const targetByLocalPair = new Map(targets.map((t) => [`${t.a}:${t.b}`, t]));
   const insertPage = archive.prepare('INSERT INTO pages(id,a,b) VALUES (?,?,?) ON CONFLICT(id) DO NOTHING');
-  let cookie = '';
-  let token = '';
-  let nextSlot = 0;
-  let halted: Error | undefined;
   let fetched = 0;
   let actions = 0;
-  const base = options.baseUrl ?? 'https://ddinter2.scbdd.com';
-  const intervalMs = options.intervalMs ?? 250;
   const concurrency = options.concurrency ?? 6;
   if (!Number.isSafeInteger(concurrency) || concurrency < 1) throw new Error('concurrency must be a positive integer');
-  const request = async (path: string, body?: URLSearchParams): Promise<Response> => {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      options.signal?.throwIfAborted();
-      if (halted) throw halted;
-      // Reserve the next start slot synchronously so concurrent workers stay evenly spaced.
-      const slot = Math.max(nextSlot, Date.now());
-      nextSlot = slot + intervalMs;
-      if (slot > Date.now()) await sleep(slot - Date.now(), undefined, { signal: options.signal });
-      if (halted) throw halted;
-      const headers = new Headers({ 'User-Agent': 'DDI-Research-Enrichment/1.0 (+https://github.com/hoangtrung1801/ddi-detect-agent)', Referer: `${base}/server/interaction/` });
-      if (cookie) headers.set('Cookie', cookie);
-      if (body) { body.set('csrfmiddlewaretoken', token); headers.set('Content-Type', 'application/x-www-form-urlencoded'); }
-      let response: Response;
-      try {
-        response = await fetch(`${base}${path}`, { method: body ? 'POST' : 'GET', headers, body, signal: AbortSignal.any([AbortSignal.timeout(60000), ...(options.signal ? [options.signal] : [])]) });
-      } catch (error) {
-        // Timeouts and dropped connections are transient; a user abort or an exhausted retry budget still fails.
-        if (options.signal?.aborted || attempt >= 2) throw error;
-        await sleep(2000 * 2 ** attempt, undefined, { signal: options.signal });
-        continue;
-      }
-      const cookies = response.headers.getSetCookie();
-      if (cookies.length) cookie = cookies.map((c) => c.split(';')[0]).join('; ');
-      if (response.status === 429) {
-        const value = response.headers.get('retry-after');
-        const until = value && /^\d+$/.test(value) ? Date.now() + Number(value) * 1000 : value ? Date.parse(value) : Date.now() + 60000;
-        meta.run('retry_after', String(Number.isFinite(until) ? until : Date.now() + 60000));
-        await response.body?.cancel();
-        throw (halted = new Error('HTTP 429: crawl paused; resume after the Retry-After deadline recorded in the archive'));
-      }
-      if (response.status === 401 || response.status === 403) { await response.body?.cancel(); throw (halted = new Error(`HTTP ${response.status}: access denied; no bypass attempted`)); }
-      if (response.status >= 500 && attempt < 2) { await response.body?.cancel(); await sleep(2000 * 2 ** attempt, undefined, { signal: options.signal }); continue; }
-      return response;
-    }
-    throw new Error('Request retry exhausted');
-  };
+  const client = createDdinterClient({ baseUrl: options.baseUrl, intervalMs: options.intervalMs, signal: options.signal, onRateLimited: (until) => meta.run('retry_after', String(until)) });
+  const request = client.request;
   const publish = () => { meta.run('updated_at', new Date().toISOString()); options.onProgress?.(crawlStatus(archive)); };
   const savePage = async (id: number, target?: Target) => {
     archive.prepare('UPDATE pages SET attempts=attempts+1 WHERE id=?').run(id);
@@ -201,26 +161,26 @@ export async function crawlInteractionDetails(options: CrawlOptions): Promise<Cr
     if (retry && Number(retry.value) > Date.now()) throw new Error(`Rate-limit deadline has not elapsed: ${new Date(Number(retry.value)).toISOString()}`);
     meta.run('state', 'running'); meta.run('error', '');
     archive.prepare("UPDATE pages SET state='pending' WHERE state='error'").run();
-    const robots = await request('/robots.txt');
-    if (robots.status !== 404) {
-      if (!robots.ok || /^\s*Disallow:\s*\/\S*/im.test(await robots.text())) throw new Error('robots.txt requires manual access-rule review; crawl paused');
-    }
+    await client.checkRobots();
     if (options.pageIds) {
       // Explicit IDs are useful for a bounded first run; only actual current pairs are ever stored/applied.
-      for (const id of options.pageIds) {
-        const saved = archive.prepare('SELECT detail_json FROM pages WHERE id=? AND state=?').get(id, 'done') as { detail_json: string } | undefined;
-        if (saved) { applyInteractionDetail(main, JSON.parse(saved.detail_json)); continue; }
-        await savePage(id);
-      }
+      const ids = options.pageIds.slice(0, options.maxPages);
+      let next = 0;
+      const worker = async () => {
+        while (next < ids.length) {
+          const id = ids[next++]!;
+          const saved = archive.prepare('SELECT detail_json FROM pages WHERE id=? AND state=?').get(id, 'done') as { detail_json: string } | undefined;
+          if (saved) { applyInteractionDetail(main, JSON.parse(saved.detail_json)); continue; }
+          await savePage(id);
+        }
+      };
+      const workers = Array.from({ length: Math.min(concurrency, ids.length) }, worker);
+      const results = await Promise.allSettled(workers);
+      const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+      if (failed) throw client.halted ?? failed.reason;
       meta.run('state', 'paused'); publish(); return crawlStatus(archive);
     }
-    const bootstrap = await request('/server/interaction/');
-    if (!bootstrap.ok) throw new Error(`Listing bootstrap HTTP ${bootstrap.status}`);
-    const html = await bootstrap.text();
-    token = html.match(/csrfmiddlewaretoken:\s*'([^']+)'/)?.[1] ?? '';
-    // The public listing currently supplies an embedded token but no Set-Cookie header.
-    // Send only session material actually issued by the site; a 401/403 always stops the crawl.
-    if (!token) throw new Error('Public listing did not supply its normal CSRF token; no bypass attempted');
+    await client.bootstrapListingToken();
     // Rolling worker pool: a slow response never stalls the other slots. Pending pages take priority over discovery.
     const inflightPages = new Set<number>(), inflightJobs = new Set<string>();
     const limitReached = () => options.maxPages !== undefined && fetched + inflightPages.size >= options.maxPages;
@@ -252,7 +212,7 @@ export async function crawlInteractionDetails(options: CrawlOptions): Promise<Cr
       await Promise.race(running);
       if (failure !== undefined) {
         await Promise.allSettled(running); // let in-flight requests record their state before surfacing the error
-        throw halted ?? failure;
+        throw client.halted ?? failure;
       }
     }
     if (options.maxPages !== undefined && fetched >= options.maxPages) meta.run('state', 'paused');

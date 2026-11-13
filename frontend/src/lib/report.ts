@@ -46,6 +46,10 @@ export interface SourceInteractionRecord {
   drugBId: string;
   level: string;
   url: string;
+  /** Absent for the DDInter category CSV exports; set for pairs read from a drug's interaction listing on the website. */
+  origin?: "website-listing";
+  listingUrl?: string;
+  retrievedAt?: string;
   details?: InteractionDetail[];
 }
 

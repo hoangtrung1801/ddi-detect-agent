@@ -49,6 +49,9 @@ export const SourceInteractionSchema = Type.Object({
   drugBId: Type.String(),
   level: Type.String(),
   url: Type.String(),
+  origin: Type.Optional(Type.Literal('website-listing')),
+  listingUrl: Type.Optional(Type.String()),
+  retrievedAt: Type.Optional(Type.String()),
   details: Type.Optional(Type.Array(InteractionDetailSchema)),
 });
 

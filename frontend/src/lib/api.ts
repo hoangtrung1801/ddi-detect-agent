@@ -1,9 +1,10 @@
 import axios from "axios";
 import type { InteractionReport, ProgressEvent } from "@/lib/report";
 
+const apiBaseURL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
+
 const api = axios.create({
-  // baseURL: "http://localhost:8000",
-  baseURL: "/api",
+  baseURL: apiBaseURL,
   headers: {
     "Content-Type": "application/json",
   },
@@ -103,8 +104,8 @@ export const drugInteractionAPI = {
     const formData = new FormData();
     formData.append("file", file);
 
-    const response = await api.post<DrugNamesFromImageResponse>("/drug-name-extract/upload", formData, {
     // Let the browser set Content-Type so the multipart boundary is included.
+    const response = await api.post<DrugNamesFromImageResponse>("/drug-name-extract/upload", formData, {
       headers: { "Content-Type": undefined },
     });
     return response.data;
@@ -237,7 +238,7 @@ export const v2API = {
     onProgress: (e: ProgressEvent) => void,
     signal?: AbortSignal,
   ): Promise<InteractionReport> => {
-    const res = await fetch("/api/v2/interactions/stream", {
+    const res = await fetch(`${apiBaseURL}/v2/interactions/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ drugs }),

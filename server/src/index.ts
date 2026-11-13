@@ -12,7 +12,7 @@ const log = pino({ level: cfg.logLevel });
 const services = await createServices(cfg, log);
 const app = createApp(services);
 const stats = services.drugDb.stats();
-const server = serve({ fetch: app.fetch, port: cfg.port }, (info) => {
+const server = serve({ fetch: app.fetch, hostname: process.env.HOST ?? '127.0.0.1', port: cfg.port }, (info) => {
   log.info({ port: info.port, drugs: stats.drugs, interactions: stats.interactions, agentModel: cfg.agentModel }, 'DDI server listening');
 });
 

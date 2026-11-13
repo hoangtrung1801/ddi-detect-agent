@@ -34,6 +34,40 @@ Stop running backend processes before rebuilding, and restart them afterward: an
 
 **Data license and attribution:** DDInter 2.0, curated by the DDInter team, <https://ddinter2.scbdd.com/>. Data and the processed derivative are provided under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/), subject to [DDInter terms](https://ddinter2.scbdd.com/terms/); this migration deduplicates category exports and adds provenance and labelled risk summaries. The software license does not override the dataset license. Do not use the data commercially without appropriate permission. DDInter and this application do not guarantee completeness or clinical accuracy.
 
+### Production deployment
+
+Frontend: <https://ddi-detect-agent.pages.dev>. `frontend/.env.production` sets the public API origin to `https://ddi-api.pooks.live`; both Axios and streaming interaction requests use `VITE_API_BASE_URL`. Development defaults to the existing Vite `/api` proxy. Never put secrets in `VITE_*` variables.
+
+`ecosystem.config.cjs` defines `ddi-backend` and `ddi-tunnel` for this host. The backend binds to `127.0.0.1:8000` by default (`HOST` overrides this) and allows the production Pages origin through CORS. The persistent, remotely managed Cloudflare tunnel is `a06623db-3729-4867-a52c-4fb4151e85d4`; its token is stored outside the repository at `/home/work/.config/ddi-detect-agent/tunnel-token` with mode `600`.
+
+Deployment setup and recovery:
+
+1. Set `OPENAI_API_KEY` in `server/.env` and protect it with `chmod 600 server/.env`. Optional model overrides are documented in `server/.env.example`.
+2. Create a **proxied CNAME** in the `pooks.live` zone: `ddi-api` → `a06623db-3729-4867-a52c-4fb4151e85d4.cfargotunnel.com`. This record is configured. The current CLI OAuth login lacks DNS write scope, so DNS changes require dashboard access or a DNS-write credential.
+3. From the repository root, start the backend and save the process list:
+
+   ```sh
+   pm2 start ecosystem.config.cjs --only ddi-backend
+   pm2 save
+   curl --fail http://127.0.0.1:8000/health
+   curl --fail https://ddi-api.pooks.live/health
+   ```
+
+The backend and tunnel are running under PM2, and their process list is saved. The enabled user unit `~/.config/systemd/user/pm2-work.service` restores the saved PM2 process list at boot; user lingering is enabled. This includes other saved PM2 applications, without changing their application configuration. Reboot recovery has not been reboot-tested. After backend code or `.env` changes, use `pm2 restart ddi-backend`; do not restart unrelated applications.
+
+To redeploy the frontend with an authenticated Wrangler session:
+
+```sh
+cd frontend
+pnpm build
+npx wrangler pages deploy dist --project-name ddi-detect-agent --branch main
+```
+
+Back up `server/data/app.sqlite` using SQLite's backup API before maintenance; it holds mutable sessions and cabinets. Keep the catalog database, vector file, and names file together. The DDInter non-commercial license and clinical limitations above still apply to public deployments.
+
+Deployment verification: the production Pages URL returns HTTP 200 and renders in Chromium. The public API `/health` returns HTTP 200 with `agent_loaded: true` and allows the production Pages origin through CORS. A real browser check of Warfarin + Ibuprofen completed through `/v2/interactions/stream` (HTTP 200), rendering a Major interaction report with DDInter evidence and AI-generated explanation. The tunnel reports four ready connections. Image extraction, follow-up chat, and cabinet persistence were not exercised by this deployment smoke check.
+
+
 ### Enrich only current interaction pairs
 
 From `server/`:

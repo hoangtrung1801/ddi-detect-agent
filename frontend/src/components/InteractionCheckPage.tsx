@@ -18,10 +18,11 @@ interface InteractionCheckPageProps {
   /** Drugs to pre-fill and check immediately, e.g. from the medicine cabinet. */
   initialDrugs?: string[];
   onRequireLogin?: () => void;
+  onOpenGraph?: (drugs: string[], pair?: [string, string]) => void;
 }
 
 /** Two steps on one page: collect the drugs, then the verdict and every pair. */
-export function InteractionCheckPage({ initialDrugs, onRequireLogin }: InteractionCheckPageProps) {
+export function InteractionCheckPage({ initialDrugs, onRequireLogin, onOpenGraph }: InteractionCheckPageProps) {
   const [drugs, setDrugs] = useState<DrugEntry[]>(() => (initialDrugs ?? []).map((name) => ({ id: newId(), name })));
   const [photos, setPhotos] = useState<PhotoEntry[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -216,6 +217,7 @@ export function InteractionCheckPage({ initialDrugs, onRequireLogin }: Interacti
         onSave={saveToCabinet}
         isSaving={isSaving}
         onFixDrug={() => setFixId(toFix[0]?.id ?? null)}
+        onOpenGraph={onOpenGraph}
       />
     </div>
   );

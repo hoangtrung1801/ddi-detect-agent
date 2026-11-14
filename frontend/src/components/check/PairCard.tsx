@@ -1,4 +1,4 @@
-import { ChevronDown, ExternalLink, Loader2 } from "lucide-react";
+import { ChevronDown, ExternalLink, Loader2, Waypoints } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { KIND_META, linkPriority, linkSourceLabel, type DrugProfile, type EvidenceSource, type LinkInfo } from "@/lib/report";
@@ -16,10 +16,12 @@ interface PairCardProps {
   /** Evidence cited in the report, by id. */
   evidence?: Record<string, EvidenceSource>;
   onFixDrug?: () => void;
+  /** Opens the 3D graph on this pair and the drugs each half interacts with. */
+  onOpenGraph?: () => void;
 }
 
 /** One pair in plain language: the answer on the header, what happens and the source data when opened. */
-export function PairCard({ pair, open, onToggle, links, profiles = {}, evidence = {}, onFixDrug }: PairCardProps) {
+export function PairCard({ pair, open, onToggle, links, profiles = {}, evidence = {}, onFixDrug, onOpenGraph }: PairCardProps) {
   const meta = KIND_META[pair.kind];
   const pendingInteraction = pair.pending && pair.status === "interaction";
   const ingredientPairs = pair.ingredientPairs ?? [];
@@ -232,6 +234,12 @@ export function PairCard({ pair, open, onToggle, links, profiles = {}, evidence 
               <span>{pair.severitySource === "DDInter 2.0" ? "Mức độ từ DDInter 2.0; giải thích do AI tổng hợp." : "Mức độ do AI ước lượng."}</span>
             )}
             {pair.status === "unresolved" && <span>Chưa tra cứu.</span>}
+            {onOpenGraph && pair.status !== "unresolved" && !pair.pending && (
+              <button type="button" onClick={onOpenGraph} className="inline-flex min-h-9 items-center gap-1.5 font-semibold text-primary hover:underline print:hidden">
+                <Waypoints className="size-4" aria-hidden="true" />
+                Xem cặp liên quan trên đồ thị 3D
+              </button>
+            )}
             {sources.map((d) => (
               <a key={d} href={links[d]!.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-primary hover:underline">
                 Thông tin về {d}

@@ -196,11 +196,13 @@ export interface GraphNode {
   seed: boolean;
 }
 
+export type GraphSeverity = "major" | "moderate" | "minor" | "unknown";
+
 export interface GraphLink {
-  /** drug_1 in the source data: usually the drug that causes the effect on `target`. */
+  /** The drug DDInter names first; the order is not a direction of effect. */
   source: string;
   target: string;
-  condition: string;
+  severity: GraphSeverity;
 }
 
 export interface GraphResponse {
@@ -208,6 +210,18 @@ export interface GraphResponse {
   links: GraphLink[];
   resolved: { input: string; name: string }[];
   unresolved: string[];
+  /** Set when the node cap left some neighbours out. */
+  truncated: { maxNodes: number; omitted: number } | null;
+}
+
+export interface GraphPairDetail {
+  a: string;
+  b: string;
+  severity: GraphSeverity;
+  descriptions: string[];
+  management: string[];
+  mechanisms: string[];
+  urls: string[];
 }
 
 /** A drug name, or a product (e.g. a supplement read from a photo) whose ingredients are checked as one drug. */
@@ -220,6 +234,11 @@ export const v2API = {
       params: drugs.length ? { drugs: drugs.join(","), neighbors } : { hubs: 40 },
       signal,
     });
+    return response.data;
+  },
+
+  graphPair: async (a: string, b: string, signal?: AbortSignal): Promise<GraphPairDetail> => {
+    const response = await api.get<GraphPairDetail>("/v2/graph/pair", { params: { a, b }, signal });
     return response.data;
   },
 

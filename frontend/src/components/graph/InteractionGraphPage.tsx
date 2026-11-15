@@ -10,6 +10,7 @@ import {
   Eye,
   Expand,
   Shrink,
+  SlidersHorizontal,
   EyeOff,
   Filter,
   Loader2,
@@ -87,6 +88,9 @@ export function InteractionGraphPage({ initialDrugs, initialPair, initialNeighbo
   const [fullscreen, setFullscreen] = useState(false);
   // Wide: the side panels go away and the graph takes the whole page; details float over it.
   const [wide, setWide] = useState(false);
+  const [spacing, setSpacing] = useState(1.5);
+  const [edgeWidth, setEdgeWidth] = useState(1.5);
+  const [tuneOpen, setTuneOpen] = useState(false);
   const [listLimit, setListLimit] = useState(LIST_STEP);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -229,6 +233,8 @@ export function InteractionGraphPage({ initialDrugs, initialPair, initialNeighbo
       const t = e.target as HTMLElement | null;
       const typing = !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
       if (e.key === "Escape" && !typing) clearSelection();
+      if (!typing && e.key === "ArrowRight") stepRef.current(1);
+      if (!typing && e.key === "ArrowLeft") stepRef.current(-1);
       if (e.key === "/" && !typing) {
         e.preventDefault();
         findRef.current?.focus();
@@ -281,6 +287,17 @@ export function InteractionGraphPage({ initialDrugs, initialPair, initialNeighbo
       (p) => (partnerSev === "all" || p.severity === partnerSev) && (!k || norm(p.name).includes(k)),
     );
   }, [nodeInfo, partnerQ, partnerSev]);
+
+  // Step through the pair list with the detail panel (or ← →) instead of hunting for edges.
+  const pairIdx = selectedPair ? sorted.findIndex((l) => pairKey(l.source, l.target) === selectedPair) : -1;
+  const stepPair = (dir: 1 | -1) => {
+    if (pairIdx < 0 || !sorted.length) return;
+    const l = sorted[(pairIdx + dir + sorted.length) % sorted.length]!;
+    selectPair(l.source, l.target);
+    graphRef.current?.flyTo(l.source);
+  };
+  const stepRef = useRef(stepPair);
+  stepRef.current = stepPair;
 
   const hasDetail = !!(selectedLink || nodeInfo);
 
@@ -602,6 +619,8 @@ export function InteractionGraphPage({ initialDrugs, initialPair, initialNeighbo
             selectedPair={selectedPair}
             labels={labels}
             dims={dims}
+            spacing={spacing}
+            edgeWidth={edgeWidth}
             onNodeClick={selectNode}
             onLinkClick={selectPair}
             onBackgroundClick={clearSelection}
@@ -743,6 +762,9 @@ export function InteractionGraphPage({ initialDrugs, initialPair, initialNeighbo
           >
             {labels === "none" ? <EyeOff className="size-[18px]" /> : <Tag className="size-[18px]" />}
           </ToolButton>
+          <ToolButton label="Giãn cách và độ dày cạnh" onClick={() => setTuneOpen((v) => !v)} active={tuneOpen}>
+            <SlidersHorizontal className="size-[18px]" />
+          </ToolButton>
           <ToolButton label={wide ? "Thu nhỏ về bố cục thường" : "Mở rộng không gian đồ thị"} onClick={() => setWide((v) => !v)} active={wide} className="hidden lg:flex">
             {wide ? <Shrink className="size-[18px]" /> : <Expand className="size-[18px]" />}
           </ToolButton>
@@ -753,6 +775,33 @@ export function InteractionGraphPage({ initialDrugs, initialPair, initialNeighbo
             {fullscreen ? <Minimize className="size-[18px]" /> : <Maximize className="size-[18px]" />}
           </ToolButton>
         </div>
+
+        {tuneOpen && (
+          <div className="absolute bottom-3 left-[4.25rem] z-10 flex w-60 flex-col gap-3 rounded-xl border border-[#23313D] bg-[#080D13]/92 p-3 text-xs text-[#D3DDE6]">
+            <label className="flex flex-col gap-1.5">
+              <span className="flex justify-between font-semibold">
+                Giãn cách thuốc <span className="text-[#9FB0BF] tabular-nums">{spacing.toFixed(1)}×</span>
+              </span>
+              <input type="range" min={0.6} max={4} step={0.1} value={spacing} onChange={(e) => setSpacing(Number(e.target.value))} className="h-6 w-full accent-[#3FD0C9]" />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="flex justify-between font-semibold">
+                Độ dày cạnh <span className="text-[#9FB0BF] tabular-nums">{edgeWidth.toFixed(1)}×</span>
+              </span>
+              <input type="range" min={0.5} max={4} step={0.1} value={edgeWidth} onChange={(e) => setEdgeWidth(Number(e.target.value))} className="h-6 w-full accent-[#3FD0C9]" />
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                setSpacing(1.5);
+                setEdgeWidth(1.5);
+              }}
+              className="self-start rounded px-1 py-1 font-semibold text-[#7FE0DA] hover:underline"
+            >
+              Đặt lại
+            </button>
+          </div>
+        )}
 
         <div className="pointer-events-none absolute right-3 bottom-3 hidden flex-col items-end gap-1.5 text-xs text-[#C9D4DE] md:flex">
           <div className="pointer-events-auto flex gap-1 rounded-lg bg-black/70 p-1" role="group" aria-label="Lọc theo mức độ">
@@ -774,7 +823,7 @@ export function InteractionGraphPage({ initialDrugs, initialPair, initialNeighbo
               );
             })}
           </div>
-          <span className="rounded-full bg-black/50 px-3 py-1.5 text-[#9FB0BF]">Kéo để xoay · Cuộn để phóng · Kéo thuốc để ghim · Chuột phải để thả · Esc bỏ chọn</span>
+          <span className="rounded-full bg-black/50 px-3 py-1.5 text-[#9FB0BF]">Kéo để xoay · Cuộn để phóng · Kéo thuốc để ghim · Chuột phải để thả · ← → đổi cặp · Esc bỏ chọn</span>
         </div>
 
         {graph.isError && (
@@ -817,6 +866,8 @@ export function InteractionGraphPage({ initialDrugs, initialPair, initialNeighbo
                 loading={pairDetail.isLoading}
                 error={pairDetail.isError}
                 onClose={clearSelection}
+                onStep={pairIdx >= 0 ? stepPair : undefined}
+                position={pairIdx >= 0 ? `${pairIdx + 1}/${sorted.length}` : undefined}
                 onAnalyze={onCheckDrugs ? () => onCheckDrugs([selectedLink.source, selectedLink.target]) : undefined}
                 onOnlyPair={() => {
                   clearSelection();
@@ -974,6 +1025,8 @@ function PairDetail({
   loading,
   error,
   onClose,
+  onStep,
+  position,
   onAnalyze,
   onOnlyPair,
   onPickDrug,
@@ -983,6 +1036,8 @@ function PairDetail({
   loading: boolean;
   error: boolean;
   onClose: () => void;
+  onStep?: (dir: 1 | -1) => void;
+  position?: string;
   onAnalyze?: () => void;
   onOnlyPair: () => void;
   onPickDrug: (id: string) => void;
@@ -995,7 +1050,20 @@ function PairDetail({
           <span className="size-2 rounded-full" style={{ background: s.color }} aria-hidden="true" />
           {s.label}
         </span>
-        <CloseButton onClick={onClose} />
+        <div className="flex items-center gap-0.5">
+          {onStep && (
+            <>
+              <button type="button" onClick={() => onStep(-1)} aria-label="Cặp trước" title="Cặp trước (←)" className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted">
+                <ChevronLeft className="size-4" />
+              </button>
+              <span className="min-w-10 text-center text-xs text-muted-foreground tabular-nums">{position}</span>
+              <button type="button" onClick={() => onStep(1)} aria-label="Cặp sau" title="Cặp sau (→)" className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted">
+                <ChevronRight className="size-4" />
+              </button>
+            </>
+          )}
+          <CloseButton onClick={onClose} />
+        </div>
       </div>
       <h2 className="text-lg leading-snug font-bold">
         <button type="button" onClick={() => onPickDrug(link.source)} className="hover:underline">

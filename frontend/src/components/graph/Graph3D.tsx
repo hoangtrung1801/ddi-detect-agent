@@ -26,6 +26,10 @@ interface Graph3DProps {
   selectedPair: string | null;
   labels: LabelMode;
   dims: 2 | 3;
+  /** Multiplier on how far apart drugs are laid out. */
+  spacing: number;
+  /** Multiplier on edge thickness. */
+  edgeWidth: number;
   onNodeClick: (id: string) => void;
   onLinkClick: (a: string, b: string) => void;
   onBackgroundClick: () => void;
@@ -91,10 +95,12 @@ function labelSprite(text: string, color: string, bold: boolean): THREE.Sprite {
 const radius = (degree: number) => 1.5 + Math.log2(1 + degree) * 0.55;
 
 /** Force-directed view: spheres are drugs (sized by how many drugs they interact with), lines are interactions coloured by DDInter risk level. */
-export function Graph3D({ ref, nodes, links, selectedNode, selectedPair, labels, dims, onNodeClick, onLinkClick, onBackgroundClick }: Graph3DProps) {
+export function Graph3D({ ref, nodes, links, selectedNode, selectedPair, labels, dims, spacing, edgeWidth, onNodeClick, onLinkClick, onBackgroundClick }: Graph3DProps) {
   const [boxRef, size] = useSize();
+  const fitted = useRef(false);
   const fg = useRef<ForceGraphMethods<Node, Link>>(undefined);
   const [hover, setHover] = useState<string | null>(null);
+  const [hoverLink, setHoverLink] = useState<string | null>(null);
 
   // A fresh object per response: the force engine mutates nodes and links in place.
   // Positions survive filter changes so toggling a severity does not re-shuffle the layout.
@@ -149,15 +155,12 @@ export function Graph3D({ ref, nodes, links, selectedNode, selectedPair, labels,
     if (!g) return;
     // Spread the layout out as the graph grows, so labels and edges stay readable.
     const n = data.nodes.length;
-    g.d3Force("charge")?.strength(-(180 + Math.min(n, 200) * 3));
-    g.d3Force("link")?.distance(70 + Math.min(n, 200) * 0.35);
+    g.d3Force("charge")?.strength(-(180 + Math.min(n, 200) * 3) * spacing);
+    g.d3Force("link")?.distance((70 + Math.min(n, 200) * 0.35) * spacing);
     g.d3ReheatSimulation();
-  }, [data]);
-
-  const fitted = useRef(false);
-  useEffect(() => {
     fitted.current = false;
-  }, [nodes]);
+  }, [data, spacing]);
+
 
   const flyTo = (n: Node) => {
     const dist = 220;
@@ -215,12 +218,17 @@ export function Graph3D({ ref, nodes, links, selectedNode, selectedPair, labels,
           }}
           linkColor={(l) => (linkLit(l) ? sevOf(l.severity).color : DIM)}
           linkOpacity={0.6}
-          linkWidth={(l) => (isSel(l) ? 1.8 : linkLit(l) && (focus || selectedPair) ? (l.severity === "major" ? 1.1 : 0.7) : l.severity === "major" ? 0.45 : 0.2)}
+          linkWidth={(l) => {
+            const base = isSel(l) ? 1.8 : linkLit(l) && (focus || selectedPair) ? (l.severity === "major" ? 1.1 : 0.7) : l.severity === "major" ? 0.45 : 0.2;
+            return (linkKey(l) === hoverLink ? Math.max(base, 1.6) : base) * edgeWidth;
+          }}
           linkDirectionalParticles={(l) => (isSel(l) ? 4 : 0)}
           linkDirectionalParticleWidth={1.8}
           linkDirectionalParticleColor={(l) => sevOf(l.severity).color}
           linkLabel={(l) => `<b>${endId(l.source)} + ${endId(l.target)}</b><br/>${sevOf(l.severity).label}`}
-          linkHoverPrecision={4}
+          // Generous pick radius: thin edges are hard to hit otherwise.
+          linkHoverPrecision={10}
+          onLinkHover={(l) => setHoverLink(l ? linkKey(l) : null)}
           onNodeHover={(n) => setHover(n ? (n.id as string) : null)}
           onNodeClick={(n) => {
             flyTo(n);

@@ -36,7 +36,7 @@ function App() {
   // Drugs handed to the check page (from the landing page or the cabinet); the run counter remounts the page for a fresh check.
   const [prefill, setPrefill] = useState<{ drugs: string[]; run: number } | null>(null);
   // Drugs (and optionally one pair to open) handed to the graph page from a result.
-  const [graphPrefill, setGraphPrefill] = useState<{ drugs: string[]; pair?: [string, string]; run: number } | null>(null);
+  const [graphPrefill, setGraphPrefill] = useState<{ drugs: string[]; pair?: [string, string]; neighbors?: number; run: number } | null>(null);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const { user, isAuthenticated } = useAuthStore();
 
@@ -50,8 +50,8 @@ function App() {
     go("interaction");
   };
 
-  const openGraph = (drugs: string[], pair?: [string, string]) => {
-    setGraphPrefill((p) => ({ drugs, pair, run: (p?.run ?? 0) + 1 }));
+  const openGraph = (drugs: string[], pair?: [string, string], neighbors?: number) => {
+    setGraphPrefill((p) => ({ drugs, pair, neighbors, run: (p?.run ?? 0) + 1 }));
     go("graph");
   };
 
@@ -123,6 +123,7 @@ function App() {
               key={graphPrefill?.run ?? 0}
               initialDrugs={graphPrefill?.drugs}
               initialPair={graphPrefill?.pair}
+              initialNeighbors={graphPrefill?.neighbors}
               onCheckDrugs={checkDrugs}
             />
           </Suspense>

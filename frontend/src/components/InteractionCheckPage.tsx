@@ -18,7 +18,7 @@ interface InteractionCheckPageProps {
   /** Drugs to pre-fill and check immediately, e.g. from the medicine cabinet. */
   initialDrugs?: string[];
   onRequireLogin?: () => void;
-  onOpenGraph?: (drugs: string[], pair?: [string, string]) => void;
+  onOpenGraph?: (drugs: string[], pair?: [string, string], neighbors?: number) => void;
 }
 
 /** Two steps on one page: collect the drugs, then the verdict and every pair. */

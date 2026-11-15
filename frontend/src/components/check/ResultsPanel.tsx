@@ -35,7 +35,7 @@ interface ResultsPanelProps {
   isSaving?: boolean;
   onFixDrug: () => void;
   /** Opens the 3D graph on these database drugs, optionally with one interaction selected. */
-  onOpenGraph?: (drugs: string[], pair?: [string, string]) => void;
+  onOpenGraph?: (drugs: string[], pair?: [string, string], neighbors?: number) => void;
 }
 
 const MAX_GRAPH_DRUGS = 10;
@@ -47,6 +47,11 @@ export function ResultsPanel({ drugs, pairs, report, running, steps, resolved, l
   const graphDrugs = [
     ...new Set(resolved.flatMap((r) => (r.ingredients?.length ? r.ingredients.map((i) => i.dbName) : [r.dbName])).filter((n): n is string => !!n)),
   ].slice(0, MAX_GRAPH_DRUGS);
+  // Drugs that appear in a found interaction: the nodes of the "pairs only" graph, whose edges are those interactions.
+  const pairDrugs = [
+    ...new Set(pairs.filter((p) => p.status === "interaction").flatMap((p) => (p.ingredientPairs?.length ? p.ingredientPairs.flatMap((i) => [i.a, i.b]) : [p.a, p.b]))),
+  ].slice(0, MAX_GRAPH_DRUGS);
+  const interactionCount = pairs.filter((p) => p.status === "interaction").length;
   const graphPair = (p: DisplayPair): [string, string] => {
     const i = p.ingredientPairs?.[0];
     return i ? [i.a, i.b] : [p.a, p.b];
@@ -127,6 +132,12 @@ export function ResultsPanel({ drugs, pairs, report, running, steps, resolved, l
               <h2 id="pairs-title" className="text-lg font-bold">
                 Từng cặp thuốc ({pairs.length})
               </h2>
+              {onOpenGraph && pairDrugs.length >= 2 && (
+                <Button className="h-[44px] rounded-[10px] font-semibold print:hidden" onClick={() => onOpenGraph(pairDrugs, undefined, 0)}>
+                  <Waypoints aria-hidden="true" />
+                  Xem {interactionCount} cặp tương tác trên đồ thị 3D
+                </Button>
+              )}
               <div role="group" aria-label="Cách xem" className="flex rounded-[10px] bg-muted p-[3px] print:hidden">
                 {(["list", "grid"] as const).map((v) => (
                   <button
@@ -191,9 +202,15 @@ export function ResultsPanel({ drugs, pairs, report, running, steps, resolved, l
             <p className="text-sm text-muted-foreground">
               Xem {graphDrugs.length > 1 ? `${graphDrugs.length} thuốc này` : "thuốc này"} cùng các thuốc khác hay tương tác với chúng, tô màu theo mức độ.
             </p>
+            {pairDrugs.length >= 2 && (
+              <Button className="h-11 rounded-xl font-semibold" onClick={() => onOpenGraph(pairDrugs, undefined, 0)}>
+                <Waypoints aria-hidden="true" />
+                Chỉ các cặp tương tác ({interactionCount})
+              </Button>
+            )}
             <Button variant="outline" className="h-11 rounded-xl bg-card font-semibold" onClick={() => onOpenGraph(graphDrugs)}>
               <Waypoints aria-hidden="true" />
-              Mở đồ thị tương tác
+              Kèm thuốc hay tương tác thêm
             </Button>
           </section>
         )}

@@ -8,6 +8,8 @@ import {
   Download,
   ExternalLink,
   Eye,
+  Expand,
+  Shrink,
   EyeOff,
   Filter,
   Loader2,
@@ -66,12 +68,14 @@ interface InteractionGraphPageProps {
   initialDrugs?: string[];
   /** An interaction to open once the graph loads (e.g. the pair a result card linked from). */
   initialPair?: [string, string];
+  /** Neighbours per drug to start with; 0 shows only the given drugs (the pairs of a result). */
+  initialNeighbors?: number;
   onCheckDrugs?: (drugs: string[]) => void;
 }
 
-export function InteractionGraphPage({ initialDrugs, initialPair, onCheckDrugs }: InteractionGraphPageProps) {
+export function InteractionGraphPage({ initialDrugs, initialPair, initialNeighbors, onCheckDrugs }: InteractionGraphPageProps) {
   const [seeds, setSeeds] = useState<string[]>(() => [...new Set(initialDrugs ?? [])].slice(0, MAX_SEEDS));
-  const [neighbors, setNeighbors] = useState(initialPair ? 10 : 25);
+  const [neighbors, setNeighbors] = useState(initialNeighbors ?? (initialPair ? 10 : 25));
   const [hiddenSev, setHiddenSev] = useState<Set<GraphSeverity>>(() => new Set());
   const [scope, setScope] = useState<Scope>("all");
   const [hiddenNodes, setHiddenNodes] = useState<Set<string>>(() => new Set());
@@ -81,6 +85,8 @@ export function InteractionGraphPage({ initialDrugs, initialPair, onCheckDrugs }
   const [dims, setDims] = useState<2 | 3>(3);
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
+  // Wide: the side panels go away and the graph takes the whole page; details float over it.
+  const [wide, setWide] = useState(false);
   const [listLimit, setListLimit] = useState(LIST_STEP);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -88,6 +94,7 @@ export function InteractionGraphPage({ initialDrugs, initialPair, onCheckDrugs }
   const [partnerQ, setPartnerQ] = useState("");
   const [partnerSev, setPartnerSev] = useState<GraphSeverity | "all">("all");
   const dq = useDebounced(q.trim(), 200);
+  const dfq = useDebounced(findQ.trim(), 200);
   const graphRef = useRef<GraphHandle>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const findRef = useRef<HTMLInputElement>(null);
@@ -101,6 +108,11 @@ export function InteractionGraphPage({ initialDrugs, initialPair, onCheckDrugs }
     queryKey: ["drug-search", dq],
     queryFn: ({ signal }) => v2API.searchDrugs(dq, signal),
     enabled: dq.length >= 2,
+  });
+  const findSuggest = useQuery({
+    queryKey: ["drug-search", dfq],
+    queryFn: ({ signal }) => v2API.searchDrugs(dfq, signal),
+    enabled: dfq.length >= 2,
   });
   const [pairA, pairB] = selectedPair ? (selectedPair.split("|") as [string, string]) : [];
   const pairDetail = useQuery({
@@ -188,6 +200,7 @@ export function InteractionGraphPage({ initialDrugs, initialPair, onCheckDrugs }
 
   const addSeed = (name: string) => {
     setQ("");
+    setFindQ("");
     setOpen(false);
     clearSelection();
     setListLimit(LIST_STEP);
@@ -249,6 +262,12 @@ export function InteractionGraphPage({ initialDrugs, initialPair, onCheckDrugs }
       .sort((a, b) => Number(!norm(a.id).startsWith(k)) - Number(!norm(b.id).startsWith(k)) || b.degree - a.degree)
       .slice(0, 6);
   }, [findQ, nodes]);
+  // Database drugs matching the find box that are not in the graph yet: one click adds them.
+  const addHits = useMemo(() => {
+    if (seeds.length >= MAX_SEEDS || dfq.length < 2 || dfq !== findQ.trim()) return [];
+    const inGraph = new Set(nodes.map((n) => norm(n.id)));
+    return (findSuggest.data ?? []).filter((s) => !inGraph.has(norm(s.name))).slice(0, 4);
+  }, [findSuggest.data, nodes, seeds.length, dfq, findQ]);
   const flyToNode = (id: string) => {
     setFindQ("");
     selectNode(id);
@@ -264,6 +283,12 @@ export function InteractionGraphPage({ initialDrugs, initialPair, onCheckDrugs }
   }, [nodeInfo, partnerQ, partnerSev]);
 
   const hasDetail = !!(selectedLink || nodeInfo);
+
+  // The graph box changes size with the layout; refit once it has.
+  useEffect(() => {
+    const t = [350, 1600].map((ms) => setTimeout(() => graphRef.current?.zoomToFit(), ms));
+    return () => t.forEach(clearTimeout);
+  }, [wide, filtersOpen]);
 
   const searchPanel = (
     <section className="rounded-xl border bg-card p-4">
@@ -503,12 +528,14 @@ export function InteractionGraphPage({ initialDrugs, initialPair, onCheckDrugs }
   return (
     <div
       className={cn(
-        "mx-auto grid w-full max-w-[1600px] gap-4 px-4 py-4 sm:px-6",
-        filtersOpen ? "lg:grid-cols-[300px_minmax(0,1fr)_360px]" : "lg:grid-cols-[56px_minmax(0,1fr)_360px]",
+        "relative mx-auto grid w-full gap-4 px-4 py-4 sm:px-6",
+        wide
+          ? "max-w-none lg:grid-cols-[minmax(0,1fr)] lg:px-4"
+          : cn("max-w-[2000px]", filtersOpen ? "lg:grid-cols-[290px_minmax(0,1fr)_350px]" : "lg:grid-cols-[56px_minmax(0,1fr)_350px]"),
       )}
     >
       {/* On phones the aside dissolves into the grid so the graph sits right under the search. */}
-      <aside className={cn("contents", filtersOpen ? "lg:flex lg:min-w-0 lg:flex-col lg:gap-3" : "lg:block")}>
+      <aside className={cn("contents", filtersOpen ? "lg:flex lg:min-w-0 lg:flex-col lg:gap-3" : "lg:block", wide && "lg:hidden")}>
         <div className={cn("flex items-start justify-between gap-2", !filtersOpen && "lg:hidden")}>
           <div>
             <h1 className="text-xl font-bold tracking-tight">Đồ thị tương tác 3D</h1>
@@ -562,7 +589,7 @@ export function InteractionGraphPage({ initialDrugs, initialPair, onCheckDrugs }
       <div
         ref={boxRef}
         className={cn(
-          "relative order-2 h-[60vh] min-h-[380px] overflow-hidden rounded-xl border border-[#1C2A36] bg-[#0B1118] lg:order-none lg:h-[calc(100vh-150px)]",
+          "relative order-2 h-[60vh] min-h-[380px] overflow-hidden rounded-xl border border-[#1C2A36] bg-[#0B1118] lg:order-none lg:h-[calc(100vh-130px)]",
           fullscreen && "rounded-none border-0",
         )}
       >
@@ -643,7 +670,10 @@ export function InteractionGraphPage({ initialDrugs, initialPair, onCheckDrugs }
               placeholder="Tìm trong đồ thị  /"
               onChange={(e) => setFindQ(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && findHits[0]) flyToNode(findHits[0].id);
+                if (e.key === "Enter") {
+                  if (findHits[0]) flyToNode(findHits[0].id);
+                  else if (addHits[0]) addSeed(addHits[0].name);
+                }
                 if (e.key === "Escape") setFindQ("");
               }}
               className="h-9 w-full rounded-lg border border-[#2A3A48] bg-[#080D13]/85 pr-3 pl-9 text-sm text-[#E6EDF3] placeholder:text-[#7D8C99] focus:border-[#3FD0C9] focus:outline-none"
@@ -663,8 +693,29 @@ export function InteractionGraphPage({ initialDrugs, initialPair, onCheckDrugs }
                       </button>
                     </li>
                   ))
-                ) : (
-                  <li className="px-2.5 py-2 text-sm text-[#9FB0BF]">Không có trong đồ thị — thêm ở ô “Thuốc trung tâm”.</li>
+                ) : null}
+                {addHits.length > 0 && (
+                  <>
+                    <li className="px-2.5 pt-2 pb-1 text-[11px] font-bold tracking-wide text-[#7D8C99] uppercase">Thêm vào đồ thị</li>
+                    {addHits.map((s) => (
+                      <li key={s.name}>
+                        <button
+                          type="button"
+                          onClick={() => addSeed(s.name)}
+                          className="flex min-h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm text-[#E6EDF3] hover:bg-[#1E3340]"
+                        >
+                          <Plus className="size-3.5 shrink-0 text-[#7FE0DA]" aria-hidden="true" />
+                          <span className="flex-1 truncate">{s.name}</span>
+                          <span className="shrink-0 text-[11px] text-[#9FB0BF] tabular-nums">{s.degree.toLocaleString("vi-VN")}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </>
+                )}
+                {!findHits.length && !addHits.length && (
+                  <li className="px-2.5 py-2 text-sm text-[#9FB0BF]">
+                    {findSuggest.isFetching ? "Đang tìm…" : "Không thấy thuốc này trong đồ thị hay CSDL."}
+                  </li>
                 )}
               </ul>
             )}
@@ -692,6 +743,9 @@ export function InteractionGraphPage({ initialDrugs, initialPair, onCheckDrugs }
           >
             {labels === "none" ? <EyeOff className="size-[18px]" /> : <Tag className="size-[18px]" />}
           </ToolButton>
+          <ToolButton label={wide ? "Thu nhỏ về bố cục thường" : "Mở rộng không gian đồ thị"} onClick={() => setWide((v) => !v)} active={wide} className="hidden lg:flex">
+            {wide ? <Shrink className="size-[18px]" /> : <Expand className="size-[18px]" />}
+          </ToolButton>
           <ToolButton label="Lưu ảnh PNG" onClick={saveImage}>
             <Camera className="size-[18px]" />
           </ToolButton>
@@ -701,15 +755,26 @@ export function InteractionGraphPage({ initialDrugs, initialPair, onCheckDrugs }
         </div>
 
         <div className="pointer-events-none absolute right-3 bottom-3 hidden flex-col items-end gap-1.5 text-xs text-[#C9D4DE] md:flex">
-          <div className="flex gap-3 rounded-lg bg-black/60 px-3 py-2">
-            {SEVERITIES.filter((s) => !hiddenSev.has(s.id)).map((s) => (
-              <span key={s.id} className="inline-flex items-center gap-1.5">
-                <span className="h-[3px] w-4 rounded" style={{ background: s.color }} />
-                {s.label}
-              </span>
-            ))}
+          <div className="pointer-events-auto flex gap-1 rounded-lg bg-black/70 p-1" role="group" aria-label="Lọc theo mức độ">
+            {SEVERITIES.map((s) => {
+              const on = !hiddenSev.has(s.id);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => toggleSev(s.id)}
+                  title={on ? `Ẩn mức "${s.label}"` : `Hiện mức "${s.label}"`}
+                  className={cn("inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 hover:bg-[#1E3340]", !on && "opacity-45")}
+                >
+                  <span className="h-[3px] w-4 rounded" style={{ background: s.color }} />
+                  {s.label}
+                  <span className="text-[#9FB0BF] tabular-nums">{(counts.get(s.id) ?? 0).toLocaleString("vi-VN")}</span>
+                </button>
+              );
+            })}
           </div>
-          <span className="rounded-full bg-black/50 px-3 py-1.5 text-[#9FB0BF]">Kéo để xoay · Cuộn để phóng · Esc để bỏ chọn</span>
+          <span className="rounded-full bg-black/50 px-3 py-1.5 text-[#9FB0BF]">Kéo để xoay · Cuộn để phóng · Kéo thuốc để ghim · Chuột phải để thả · Esc bỏ chọn</span>
         </div>
 
         {graph.isError && (
@@ -729,12 +794,20 @@ export function InteractionGraphPage({ initialDrugs, initialPair, onCheckDrugs }
         )}
       </div>
 
-      <div className="order-4 flex min-w-0 flex-col gap-3 lg:order-none lg:h-[calc(100vh-150px)]">
+      <div
+        className={cn(
+          "order-4 flex min-w-0 flex-col gap-3 lg:order-none lg:h-[calc(100vh-130px)]",
+          wide && "lg:absolute lg:top-[5.25rem] lg:right-8 lg:z-10 lg:h-auto lg:max-h-[calc(100vh-190px)] lg:w-[380px]",
+        )}
+      >
         {hasDetail && (
           <section
             aria-live="polite"
             aria-label="Chi tiết"
-            className="fixed inset-x-0 bottom-0 z-40 max-h-[50vh] overflow-auto rounded-t-2xl border-t bg-card p-4 shadow-[0_-8px_24px_rgba(0,0,0,0.25)] lg:static lg:max-h-[62%] lg:shrink-0 lg:rounded-xl lg:border lg:shadow-none"
+            className={cn(
+              "fixed inset-x-0 bottom-0 z-40 max-h-[50vh] overflow-auto rounded-t-2xl border-t bg-card p-4 shadow-[0_-8px_24px_rgba(0,0,0,0.25)] lg:static lg:max-h-[62%] lg:shrink-0 lg:rounded-xl lg:border lg:shadow-xl",
+              wide && "lg:max-h-[calc(100vh-190px)]",
+            )}
           >
             <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-neutral-line lg:hidden" aria-hidden="true" />
             {selectedLink ? (
@@ -835,7 +908,7 @@ export function InteractionGraphPage({ initialDrugs, initialPair, onCheckDrugs }
           </section>
         )}
 
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card">
+        <section className={cn("flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card", wide && "lg:hidden")}>
           <div className="flex items-baseline justify-between gap-2 border-b px-4 pt-3.5 pb-2.5">
             <h2 className="text-sm font-bold">Cặp trong đồ thị</h2>
             <span className="text-xs text-muted-foreground">xếp theo mức độ</span>
@@ -1043,7 +1116,7 @@ function Pill({ on, onClick, className, children }: { on: boolean; onClick: () =
   );
 }
 
-function ToolButton({ label, onClick, active, children }: { label: string; onClick: () => void; active?: boolean; children: ReactNode }) {
+function ToolButton({ label, onClick, active, className, children }: { label: string; onClick: () => void; active?: boolean; className?: string; children: ReactNode }) {
   return (
     <button
       type="button"
@@ -1053,6 +1126,7 @@ function ToolButton({ label, onClick, active, children }: { label: string; onCli
       className={cn(
         "flex size-10 items-center justify-center rounded-lg text-[#D3DDE6] hover:bg-[#1E3340]",
         active && "bg-[#1E3340] text-[#7FE0DA]",
+        className,
       )}
     >
       {children}

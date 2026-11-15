@@ -147,8 +147,11 @@ export function Graph3D({ ref, nodes, links, selectedNode, selectedPair, labels,
   useEffect(() => {
     const g = fg.current;
     if (!g) return;
-    g.d3Force("charge")?.strength(-140);
-    g.d3Force("link")?.distance(60);
+    // Spread the layout out as the graph grows, so labels and edges stay readable.
+    const n = data.nodes.length;
+    g.d3Force("charge")?.strength(-(180 + Math.min(n, 200) * 3));
+    g.d3Force("link")?.distance(70 + Math.min(n, 200) * 0.35);
+    g.d3ReheatSimulation();
   }, [data]);
 
   const fitted = useRef(false);
@@ -225,7 +228,19 @@ export function Graph3D({ ref, nodes, links, selectedNode, selectedPair, labels,
           }}
           onLinkClick={(l) => onLinkClick(endId(l.source), endId(l.target))}
           onBackgroundClick={onBackgroundClick}
-          cooldownTicks={160}
+          onNodeDragEnd={(n) => {
+            // A dragged drug stays where it was dropped; double-clicking (below) releases it.
+            n.fx = n.x;
+            n.fy = n.y;
+            n.fz = n.z;
+          }}
+          onNodeRightClick={(n) => {
+            n.fx = undefined;
+            n.fy = undefined;
+            n.fz = undefined;
+            fg.current?.d3ReheatSimulation();
+          }}
+          cooldownTicks={200}
           onEngineStop={() => {
             if (fitted.current) return;
             fitted.current = true;

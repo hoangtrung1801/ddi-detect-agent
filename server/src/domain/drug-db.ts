@@ -77,6 +77,20 @@ export class DrugDb {
     };
   }
 
+  /** Every interaction among `drugs`, without the per-pair detail lookups `lookupPair` does: for the graph. */
+  edgesAmong(drugs: Drug[]): { first: Drug; second: Drug; severity: Severity | null }[] {
+    if (drugs.length < 2) return [];
+    const ids = drugs.map((d) => d.id);
+    const ph = ids.map(() => '?').join(',');
+    const rows = this.#db
+      .prepare(`SELECT a, b, src_a, source_severity FROM interactions WHERE a IN (${ph}) AND b IN (${ph})`)
+      .all(...ids, ...ids) as { a: number; b: number; src_a: number; source_severity: Severity | null }[];
+    return rows.map((r) => {
+      const [x, y] = r.src_a === r.b ? [r.b, r.a] : [r.a, r.b];
+      return { first: this.#byId.get(x)!, second: this.#byId.get(y)!, severity: r.source_severity };
+    });
+  }
+
   /** Number of drugs each drug interacts with. */
   degree(d: Drug): number {
     return this.#adjacency().get(d.id)?.length ?? 0;

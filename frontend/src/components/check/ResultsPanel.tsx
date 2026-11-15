@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileDown, Loader2, Printer, Save } from "lucide-react";
+import { FileDown, Loader2, Printer, Save, Waypoints } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -34,11 +34,23 @@ interface ResultsPanelProps {
   onSave?: () => void;
   isSaving?: boolean;
   onFixDrug: () => void;
+  /** Opens the 3D graph on these database drugs, optionally with one interaction selected. */
+  onOpenGraph?: (drugs: string[], pair?: [string, string]) => void;
 }
+
+const MAX_GRAPH_DRUGS = 10;
 
 const anchor = (id: string) => `pair-${id.replace(/\W/g, "_")}`;
 
-export function ResultsPanel({ drugs, pairs, report, running, steps, resolved, livePairs, evidence = [], startedAt = null, unresolved, stale, photos, photoView, onViewPhoto, onSave, isSaving, onFixDrug }: ResultsPanelProps) {
+export function ResultsPanel({ drugs, pairs, report, running, steps, resolved, livePairs, evidence = [], startedAt = null, unresolved, stale, photos, photoView, onViewPhoto, onSave, isSaving, onFixDrug, onOpenGraph }: ResultsPanelProps) {
+  // Database names of everything checked; a product counts as its ingredients.
+  const graphDrugs = [
+    ...new Set(resolved.flatMap((r) => (r.ingredients?.length ? r.ingredients.map((i) => i.dbName) : [r.dbName])).filter((n): n is string => !!n)),
+  ].slice(0, MAX_GRAPH_DRUGS);
+  const graphPair = (p: DisplayPair): [string, string] => {
+    const i = p.ingredientPairs?.[0];
+    return i ? [i.a, i.b] : [p.a, p.b];
+  };
   // undefined: the most serious pair is open; null: all closed.
   const [openId, setOpenId] = useState<string | null | undefined>(undefined);
   const [view, setView] = useState<"list" | "grid">("list");
@@ -140,6 +152,13 @@ export function ResultsPanel({ drugs, pairs, report, running, steps, resolved, l
                 profiles={report?.drug_profiles}
                 evidence={report?.sources}
                 onFixDrug={onFixDrug}
+                onOpenGraph={
+                  onOpenGraph &&
+                  (() => {
+                    const pr = graphPair(p);
+                    onOpenGraph(pr, p.status === "interaction" ? pr : undefined);
+                  })
+                }
               />
             ))}
           </section>
@@ -166,6 +185,18 @@ export function ResultsPanel({ drugs, pairs, report, running, steps, resolved, l
             In để mang tới bác sĩ
           </Button>
         </section>
+        {onOpenGraph && graphDrugs.length > 0 && (
+          <section className="flex flex-col gap-2.5 rounded-2xl border bg-card px-5 py-4">
+            <h2 className="text-[15px] font-bold">Khám phá trên đồ thị 3D</h2>
+            <p className="text-sm text-muted-foreground">
+              Xem {graphDrugs.length > 1 ? `${graphDrugs.length} thuốc này` : "thuốc này"} cùng các thuốc khác hay tương tác với chúng, tô màu theo mức độ.
+            </p>
+            <Button variant="outline" className="h-11 rounded-xl bg-card font-semibold" onClick={() => onOpenGraph(graphDrugs)}>
+              <Waypoints aria-hidden="true" />
+              Mở đồ thị tương tác
+            </Button>
+          </section>
+        )}
         <SourcePhotos photos={photos} viewId={photoView} onView={onViewPhoto} />
         {report && <AskAboutResult report={report} />}
         <p className="text-[13px] text-muted-foreground">Tra cứu trong DDInter 2.0. Giải thích do AI tổng hợp, chỉ mang tính tham khảo.</p>

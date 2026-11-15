@@ -12,13 +12,20 @@ describe('v2 graph', () => {
     const ids = body.nodes.map((n: any) => n.id).sort();
     expect(ids).toEqual(['Acetaminophen', 'Acetylsalicylic acid', 'Ibuprofen', 'Warfarin']);
     expect(body.nodes.find((n: any) => n.id === 'Warfarin')).toEqual({ id: 'Warfarin', degree: 3, seed: true });
-    // Warfarin's three edges plus Ibuprofen–Aspirin between two partners; links point from the drug named first.
+    // Warfarin's three edges plus Ibuprofen–Aspirin between two partners; links list the drug named first as source.
     expect(body.links).toHaveLength(4);
-    expect(body.links).toContainEqual({
-      source: 'Ibuprofen',
-      target: 'Acetylsalicylic acid',
-      condition: 'The risk or severity of gastrointestinal bleeding can be increased when Ibuprofen is combined with Acetylsalicylic acid.',
-    });
+    expect(body.links).toContainEqual({ source: 'Ibuprofen', target: 'Acetylsalicylic acid', severity: 'unknown' });
+    expect(body.truncated).toBeNull();
+  });
+
+  it('GET /v2/graph/pair returns what the database says about one pair', async () => {
+    const env = await makeHttpEnv();
+    const body = await (await env.json('/v2/graph/pair?a=Acetylsalicylic%20acid&b=Ibuprofen', 'GET')).json();
+    expect(body).toMatchObject({ a: 'Acetylsalicylic acid', b: 'Ibuprofen', severity: 'unknown', management: [], mechanisms: [] });
+    expect(body.descriptions).toEqual([
+      'The risk or severity of gastrointestinal bleeding can be increased when Ibuprofen is combined with Acetylsalicylic acid.',
+    ]);
+    expect((await env.json('/v2/graph/pair?a=Warfarin&b=Nonexistium', 'GET')).status).toBe(404);
   });
 
   it('GET /v2/graph with neighbors=0 keeps only the named drugs', async () => {

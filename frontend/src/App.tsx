@@ -35,6 +35,8 @@ function App() {
   const [page, setPage] = useState<Page>("home");
   // Drugs handed to the check page (from the landing page or the cabinet); the run counter remounts the page for a fresh check.
   const [prefill, setPrefill] = useState<{ drugs: string[]; run: number } | null>(null);
+  // Drugs (and optionally one pair to open) handed to the graph page from a result.
+  const [graphPrefill, setGraphPrefill] = useState<{ drugs: string[]; pair?: [string, string]; run: number } | null>(null);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const { user, isAuthenticated } = useAuthStore();
 
@@ -46,6 +48,11 @@ function App() {
   const checkDrugs = (drugs: string[]) => {
     setPrefill((p) => ({ drugs, run: (p?.run ?? 0) + 1 }));
     go("interaction");
+  };
+
+  const openGraph = (drugs: string[], pair?: [string, string]) => {
+    setGraphPrefill((p) => ({ drugs, pair, run: (p?.run ?? 0) + 1 }));
+    go("graph");
   };
 
   const home = (
@@ -104,10 +111,20 @@ function App() {
         {page === "home" ? (
           <LandingPage logo={home} account={account} onStart={checkDrugs} onOpenCheck={() => go("interaction")} />
         ) : page === "interaction" ? (
-          <InteractionCheckPage key={prefill?.run ?? 0} initialDrugs={prefill?.drugs} onRequireLogin={() => setIsLoginOpen(true)} />
+          <InteractionCheckPage
+            key={prefill?.run ?? 0}
+            initialDrugs={prefill?.drugs}
+            onRequireLogin={() => setIsLoginOpen(true)}
+            onOpenGraph={openGraph}
+          />
         ) : page === "graph" ? (
           <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Đang tải đồ thị…</div>}>
-            <InteractionGraphPage onCheckDrugs={checkDrugs} />
+            <InteractionGraphPage
+              key={graphPrefill?.run ?? 0}
+              initialDrugs={graphPrefill?.drugs}
+              initialPair={graphPrefill?.pair}
+              onCheckDrugs={checkDrugs}
+            />
           </Suspense>
         ) : (
           <PatientProfile onCheckDrugs={checkDrugs} onRequireLogin={() => setIsLoginOpen(true)} />

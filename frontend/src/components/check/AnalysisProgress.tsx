@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Check, FileText, Library, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { EvidenceSource, PairResult, ResolvedDrug } from "@/lib/report";
+import { drugInteractionAPI } from "@/lib/api";
 import type { StepId, StepState } from "./useInteractionCheck";
 
 interface AnalysisProgressProps {
@@ -24,9 +25,21 @@ function useElapsed(startedAt: number | null | undefined, running: boolean): num
   return startedAt ? Math.max(0, Math.round((now - startedAt) / 1000)) : 0;
 }
 
+/** Interactions currently in the database, read from the server so the figure never goes stale. */
+function useTotalInteractions(): number | null {
+  const [total, setTotal] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    drugInteractionAPI.getStats().then((s) => live && setTotal(s.total_interactions)).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
+  return total;
+}
+
 /** The work as it happens: which drugs were recognised, what the database found, which documents are being read. */
 export function AnalysisProgress({ steps, running, resolved, pairs, evidence = [], startedAt }: AnalysisProgressProps) {
   const elapsed = useElapsed(startedAt, running);
+  const totalInteractions = useTotalInteractions();
   const matched = resolved.filter((d) => d.dbName).length;
   const count = (s: PairResult["status"]) => pairs.filter((p) => p.status === s).length;
   const found = count("interaction");
@@ -58,7 +71,7 @@ export function AnalysisProgress({ steps, running, resolved, pairs, evidence = [
     {
       id: "pairs",
       st: steps.pairs,
-      title: pairs.length ? `Đối chiếu ${pairs.length} cặp với 160.235 tương tác trong DDInter 2.0` : "Đối chiếu với cơ sở dữ liệu tương tác DDInter 2.0",
+      title: pairs.length ? `Đối chiếu ${pairs.length} cặp với ${totalInteractions ? `${totalInteractions.toLocaleString("vi-VN")} tương tác` : "cơ sở dữ liệu tương tác"} trong DDInter 2.0` : "Đối chiếu với cơ sở dữ liệu tương tác DDInter 2.0",
       note: pairNote || undefined,
     },
     {

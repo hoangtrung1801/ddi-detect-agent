@@ -24,6 +24,9 @@ function useElapsed(startedAt: number | null | undefined, running: boolean): num
   return startedAt ? Math.max(0, Math.round((now - startedAt) / 1000)) : 0;
 }
 
+/** Published dataset figure (DDInter 2.0 category exports: 160,235 pairs, 1,939 drugs), kept in line with the poster and document. */
+const PUBLISHED_INTERACTIONS = 160235;
+
 /** The work as it happens: which drugs were recognised, what the database found, which documents are being read. */
 export function AnalysisProgress({ steps, running, resolved, pairs, evidence = [], startedAt }: AnalysisProgressProps) {
   const elapsed = useElapsed(startedAt, running);
@@ -58,7 +61,7 @@ export function AnalysisProgress({ steps, running, resolved, pairs, evidence = [
     {
       id: "pairs",
       st: steps.pairs,
-      title: pairs.length ? `Đối chiếu ${pairs.length} cặp với 160.235 tương tác trong DDInter 2.0` : "Đối chiếu với cơ sở dữ liệu tương tác DDInter 2.0",
+      title: pairs.length ? `Đối chiếu ${pairs.length} cặp với ${PUBLISHED_INTERACTIONS.toLocaleString("vi-VN")} tương tác trong DDInter 2.0` : "Đối chiếu với cơ sở dữ liệu tương tác DDInter 2.0",
       note: pairNote || undefined,
     },
     {

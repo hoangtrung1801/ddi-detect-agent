@@ -132,16 +132,8 @@ function App() {
       </main>
 
       <footer className="border-t bg-card print:hidden">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-wrap justify-between gap-2 px-4 py-4 text-sm text-muted-foreground sm:px-6">
+        <div className="mx-auto w-full max-w-[1200px] px-4 py-4 text-sm text-muted-foreground sm:px-6">
           <span>DRUG-GUARD AI — phát hiện tương tác thuốc bằng AI. Thông tin chỉ mang tính tham khảo.</span>
-          <a
-            href="https://github.com/hoangtrung1801/ddi-detect-agent"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-primary hover:underline"
-          >
-            GitHub
-          </a>
         </div>
       </footer>
       <LoginDialog open={isLoginOpen} onOpenChange={setIsLoginOpen} />

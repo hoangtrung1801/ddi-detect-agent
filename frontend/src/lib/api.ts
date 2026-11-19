@@ -21,9 +21,9 @@ export interface QueryResponse {
 }
 
 export interface StatsResponse {
-  drugs: number;
-  interactions: number;
-  sessions: number;
+  total_drugs: number;
+  total_interactions: number;
+  active_sessions: number;
 }
 
 export interface DrugNamesFromImageResponse {

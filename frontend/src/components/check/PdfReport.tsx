@@ -57,7 +57,7 @@ export function PdfReport({ report, pairs, drugs, unresolved, qr, generatedAt }:
       <div className="flex w-[794px] flex-col gap-4 bg-white px-10 pt-2 pb-6 text-[13px] leading-relaxed text-[#0F1A24]">
         <Block className="flex items-end justify-between border-b-2 border-[#0B4C50] pb-3">
           <div>
-            <div className="text-[22px] font-bold tracking-tight text-[#0B4C50]">DRUG-GUARD AI</div>
+            <div className="text-[22px] font-bold tracking-tight text-[#0B4C50]">MEDLENS</div>
             <div className="text-[15px] font-semibold">Báo cáo kiểm tra tương tác thuốc</div>
           </div>
           <div className="text-right text-[12px] text-[#5B6670]">

@@ -90,7 +90,7 @@ function useSpeech(text: string) {
 
 /** Plain-text summary for sharing with family or a doctor, with source links. */
 function shareText(report: InteractionReport, pairs: DisplayPair[], title: string, sub: string): string {
-  const lines = [`DRUG-GUARD AI: ${title}`, sub, ""];
+  const lines = [`MEDLENS: ${title}`, sub, ""];
   for (const p of pairs) lines.push(`• ${p.a} + ${p.b}: ${KIND_META[p.kind].label} (${KIND_META[p.kind].answer})`);
   if (report.recommendations.length) lines.push("", "Gợi ý:", ...report.recommendations.map((r, i) => `${i + 1}. ${r}`));
   const src = Object.values(report.sources ?? {});

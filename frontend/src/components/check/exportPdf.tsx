@@ -87,10 +87,10 @@ export async function exportReportPdf(props: Omit<PdfReportProps, "qr" | "genera
       }
       pdf.setFontSize(8);
       pdf.setTextColor(120);
-      pdf.text(`DRUG-GUARD AI  -  ${i + 1}/${pages.length}`, PAGE_W_MM / 2, PAGE_H_MM - 8, { align: "center" });
+      pdf.text(`MEDLENS  -  ${i + 1}/${pages.length}`, PAGE_W_MM / 2, PAGE_H_MM - 8, { align: "center" });
     });
     const stamp = generatedAt.toISOString().slice(0, 10);
-    pdf.save(`drug-guard-bao-cao-${stamp}.pdf`);
+    pdf.save(`medlens-bao-cao-${stamp}.pdf`);
   } finally {
     root.unmount();
     host.remove();
